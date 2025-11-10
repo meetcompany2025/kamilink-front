@@ -10,6 +10,7 @@ const publicRoutes = [
   "/reset-password",
   "/about",
   "/contact",
+  "/services/main",
   "/help",
 ];
 

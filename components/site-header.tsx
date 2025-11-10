@@ -216,7 +216,7 @@ export default function SiteHeader() {
     return [
       
       { label: t("navigation.home"), href: "/" },
-      { label: t("navigation.services"), href: "/services" },
+      { label: t("navigation.services"), href: "/services/main" },
       { label: t("navigation.about"), href: "/about" },
     ]
   }, [])
