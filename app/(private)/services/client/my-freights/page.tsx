@@ -1,52 +1,62 @@
-//import { getUserProfile } from "@/lib/supabase/auth"
-/*import { redirect } from "next/navigation"
-import { AuthService } from "@/services/authService"
-import { cookies } from "next/headers";*/
-
 "use client"
 
 import { useEffect, useState } from "react"
-import { Loader2, PackageSearch, ArrowRight, Badge } from "lucide-react"
-// import Link from "next/navigation/link"
+import { Loader2, PackageSearch, ArrowRight } from "lucide-react"
+import Link from "next/link"
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth-provider"
 import { FreightRequestService } from "@/services/freightRequestService"
+import { FreightRequest } from "@/types/freightRequest"
 
-const statusConfig: Record<
-  string,
-  { label: string; color: string }
-> = {
+type Freight = {
+  id: string
+  origin: string
+  originState: string
+  destination: string
+  destinationState: string
+  pickupDate: string
+  deliveryDate: string
+  cargoType: string
+  status: keyof typeof statusConfig
+}
+
+const statusConfig = {
   PENDING:     { label: "Pendente",     color: "bg-yellow-200 text-yellow-900" },
   ACCEPTED:    { label: "Aceite",       color: "bg-blue-200 text-blue-900" },
   IN_PROGRESS: { label: "Em Andamento", color: "bg-purple-200 text-purple-900" },
   COMPLETED:   { label: "Concluído",    color: "bg-green-200 text-green-900" },
   CANCELED:    { label: "Cancelado",    color: "bg-red-200 text-red-900" },
-};
+} as const
 
 export default function MyFreightsPage() {
   const { user } = useAuth()
-  const [freights, setFreights] = useState([])
+  const [freights, setFreights] = useState<FreightRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const fetchFreights = async () => {
       try {
-        console.log(user.id)
-        const res = await  FreightRequestService.getClientFreights()
+        if (!user?.id) return
 
-        //if (!res.ok) throw new Error("Erro ao buscar fretes")
-        console.log(res);
-        setFreights(res)
+        const response = await FreightRequestService.getClientFreights()
+
+        if (!response) {
+          console.warn("Nenhum frete retornado da API.")
+          setFreights([])
+          return
+        }
+
+        setFreights(response)
       } catch (err) {
-        console.error(err)
+        console.error("Erro ao buscar fretes:", err)
       } finally {
         setIsLoading(false)
       }
     }
 
-    if (user) fetchFreights()
+    fetchFreights()
   }, [user])
 
   if (isLoading) {
@@ -64,7 +74,9 @@ export default function MyFreightsPage() {
     <div className="container mx-auto py-10 px-4">
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Meus Fretes</h1>
-        <p className="text-muted-foreground">Acompanhe todos os fretes que você solicitou.</p>
+        <p className="text-muted-foreground">
+          Acompanhe todos os fretes que você solicitou.
+        </p>
       </div>
 
       {freights.length === 0 ? (
@@ -77,7 +89,7 @@ export default function MyFreightsPage() {
                 Você ainda não solicitou nenhum frete. Crie um novo para começar.
               </p>
               <Button asChild>
-                <a href="/services/freight">Criar Novo Frete</a>
+                <Link href="/services/freight">Criar Novo Frete</Link>
               </Button>
             </div>
           </CardContent>
@@ -85,80 +97,66 @@ export default function MyFreightsPage() {
       ) : (
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           {freights.map((freight) => {
+            const status =
+              statusConfig[(freight as unknown as { status?: string }).status as keyof typeof statusConfig] ??
+              statusConfig.PENDING
 
-            const status = statusConfig[freight.status as keyof typeof statusConfig] ??
-            statusConfig.PENDING;
-            
+
             return (
               <Card key={freight.id}>
-              <CardHeader>
-          <CardTitle className="text-lg font-semibold">
-            {freight.origin}, {freight.originState} → {freight.destination},{" "}
-            {freight.destinationState}
-          </CardTitle>
-        </CardHeader>
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold">
+                    {freight.origin}, {freight.originState} →{" "}
+                    {freight.destination}, {freight.destinationState}
+                  </CardTitle>
+                </CardHeader>
 
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          {/* Status with badge */}
-          <div className="flex items-center gap-2">
-            <strong>Status:</strong>
-            <span className={`px-3 py-1 rounded-full  text-xs font-medium ${status.color}`}>
-              {status.label}
-            </span>
-          </div>
+                <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <strong>Status:</strong>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${status.color}`}
+                    >
+                      {status.label}
+                    </span>
+                  </div>
 
-          {/* Pickup & Delivery Dates aligned */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="font-medium text-gray-700">Data de Coleta</p>
-              <p>{new Date(freight.pickupDate).toLocaleDateString("pt-AO")}</p>
-            </div>
-            <div>
-              <p className="font-medium text-gray-700">Data de Entrega</p>
-              <p>{new Date(freight.deliveryDate).toLocaleDateString("pt-AO")}</p>
-            </div>
-          </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="font-medium text-gray-700">Data de Coleta</p>
+                      <p>
+                        {new Date(freight.pickupDate).toLocaleDateString("pt-AO")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-700">Data de Entrega</p>
+                      <p>
+                        {new Date(freight.deliveryDate).toLocaleDateString("pt-AO")}
+                      </p>
+                    </div>
+                  </div>
 
-          {/* Cargo Type */}
-          <div>
-            <p className="font-medium text-gray-700">Tipo de Carga</p>
-            <p>{freight.cargoType}</p>
-          </div>
-        </CardContent>
-                <CardFooter className="text-sm text-muted-foreground">
+                  <div>
+                    <p className="font-medium text-gray-700">Tipo de Carga</p>
+                    <p>{freight.cargoType}</p>
+                  </div>
+                </CardContent>
+
+                <CardFooter>
                   <Button asChild className="mt-2 w-full">
-                    <a href={`/services/client/freight/${freight.id}`} className="inline-flex items-center gap-2">
+                    <Link
+                      href={`/services/client/freight/${freight.id}`}
+                      className="inline-flex items-center gap-2"
+                    >
                       Ver Detalhes <ArrowRight className="h-4 w-4" />
-                    </a>
+                    </Link>
                   </Button>
                 </CardFooter>
-                
               </Card>
-          )})}
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
-
-
-/*const MyFreightsPage = async () => {
-  const cookieStore = cookies(); // Já é o objeto, não precisa de await
-  const token = cookieStore.get("token")?.value;
-
-  if (!token) redirect("/login");
-
-  const user = await AuthService.me(token);
-
-  if (!user) redirect("/login");
-
-  return (
-    <div>
-      <h1>My Freights</h1>
-      <p>Welcome, {user?.email}!</p>
-      //{ Add your freights list or other content here }
-    </div>
-  )
-}
-
-export default MyFreightsPage*/

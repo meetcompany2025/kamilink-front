@@ -1,16 +1,21 @@
 "use client"
 
-import { useState, useEffect, use, useCallback } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { useParams } from 'next/navigation'
+import { useParams } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/components/auth-provider"
-//import { getFreightRequestById } from "@/lib/supabase/freight"
+
 import { FreightRequestService } from "@/services/freightRequestService"
+import { geocodeAddress } from "@/lib/geo-utils"
+import { MapView, type MapLocation } from "@/components/map/map-view"
+
 import {
   ArrowLeft,
   Calendar,
@@ -23,334 +28,58 @@ import {
   AlertTriangle,
   Map,
 } from "lucide-react"
-import Link from "next/link"
-import { MapView, type MapLocation } from "@/components/map/map-view"
-import { geocodeAddress } from "@/lib/geo-utils"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DialogHeader, DialogFooter } from "@/components/ui/dialog"
-import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogTitle } from "@radix-ui/react-dialog"
-// import { ProtectedRoute } from "@/components/protected-route"
 
-export type FreightStatus = 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog" // usa seu wrapper consistente
+import { FreightRequest } from "@/types/freightRequest"
+
+// Importa o tipo real do seu projeto — ajuste o path se necessário
+
+
+type FreightStatus =
   | "PENDING"
   | "ACCEPTED"
   | "IN_PROGRESS"
   | "COMPLETED"
   | "CANCELED"
 
-export interface Freight {
- data: {  
-  //  id: string
-  description: string
-  clientId: string
-  transporterId?: string | null
-  vehicleId?: string | null
-  
-  origin: string
-  destination: string
-  originState: string
-  destinationState: string
-  
-  cargoType: string
-  paymentMethod: string
-  price?: number | null
+export function FreightDetailsContent() {
+  const router = useRouter()
+  const { id } = useParams() as { id?: string } // id pode vir undefined
+  const { toast } = useToast()
+  const { user, userProfile, isLoading: authLoading } = useAuth()
 
-  requiresLoadingHelp: boolean
-  requiresUnloadingHelp: boolean
-  hasInsurance: boolean
-
-  weightKg?: number | null
-  quantity?: number | null
-  lengthCm?: number | null
-  widthCm?: number | null
-  heightCm?: number | null
-
-  pickupDate?: string | Date | null
-  deliveryDate?: string | Date | null
-
-  originCoordinates: string
-  destinationCoordinates: string
-  estimatedDistance: number
-  estimatedTime: number
-
-  status: FreightStatus
-
-  createdAt: string | Date
-  updatedAt: string | Date
-  canceledAt?: string | Date | null
-  attributedAt?: string | Date | null
-
-  cancelationReason?: string | null
- }
-
-  // Relacionamentos — pode adicionar tipos reais depois se quiser tipar também
-  // client?: any
-  // transporter?: any
-  // vehicle?: any
-  // Review?: any[]
-  // Image?: any[]
-  // Tracking?: any[]
-  // FreightStatusHistory?: any[]
-  // FreightLocationTracking?: any[]
-  // FreightLastLocation?: any
-}
-
-
-
-function FreightDetailsContent() {
-
-  const [freight, setFreight] = useState<any>(null)
+  const [freight, setFreight] = useState<FreightRequest | null>(null)
   const [loading, setLoading] = useState(true)
   const [mapLocations, setMapLocations] = useState<MapLocation[]>([])
   const [isLoadingMap, setIsLoadingMap] = useState(false)
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
-  const [open, setOpen] = useState(false);
-  const [showReason, setShowReason] = useState(false);
-  const { user, userProfile, isLoading } = useAuth()
-  const router = useRouter()
-  const { toast } = useToast()
-  const {id} = useParams<{id: string}>();
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [openReasonDialog, setOpenReasonDialog] = useState(false)
+  const [showReasonInline, setShowReasonInline] = useState(false)
+  const [mapError, setMapError] = useState(false)
 
-
-  // useEffect(() => {
-  //   // alert(user.id)
-  //   // if (isLoading) return  
-  //   if (!user) {
-  //     // router.push("/estragou") 
-  //     return
-  //   }
-
-  //   // alert(user.id)
-  //   const fetchFreight = async () => {
-
-  //     console.log('ID do frete:', id);
-
-  //     // <></>
-
-  //     // alert(id)
-  //     try {
-  //       setLoading(true)
-  //       const data = await FreightRequestService.getFreightDetail(id)
-        
-  //       console.log('Dados do frete 1:', data);
-  //       if (!data) {
-  //         toast({
-  //           title: "Erro",
-  //           description: "Frete não encontrado",
-  //           variant: "destructive",
-  //         })
-  //         console.log('Não rolou')
-  //         router.push("/dashboard")
-  //         return
-  //       }
-  //       setFreight(data)
-
-  //       console.log(data)
-
-  //       // Geocodificar endereços para o mapa
-  //       setIsLoadingMap(true)
-  //       try {
-  //         const originAddress = `${data.origin}`
-  //         const destinationAddress = `${data.destination}`
-
-  //         const originCoords = await geocodeAddress(originAddress)
-  //         const destinationCoords = await geocodeAddress(destinationAddress)
-
-  //         const locations: MapLocation[] = []
-
-  //         if (originCoords) {
-  //           locations.push({
-  //             ...originCoords,
-  //             name: "Origem",
-  //             description: originAddress,
-  //             isOrigin: true,
-  //           })
-  //         }
-
-  //         if (destinationCoords) {
-  //           locations.push({
-  //             ...destinationCoords,
-  //             name: "Destino",
-  //             description: destinationAddress,
-  //             isDestination: true,
-  //           })
-  //         }
-
-  //         setMapLocations(locations)
-  //       } catch (error) {
-  //         console.error("Erro ao geocodificar endereços:", error)
-  //         toast({
-  //           title: "Erro no mapa",
-  //           description: "Não foi possível carregar o mapa com as localizações.",
-  //           variant: "destructive",
-  //         })
-  //       } finally {
-  //         setIsLoadingMap(false)
-  //       }
-  //     } catch (error) {
-  //       console.error("Erro ao buscar detalhes do frete:", error)
-  //       toast({
-  //         title: "Erro",
-  //         description: "Não foi possível carregar os detalhes do frete",
-  //         variant: "destructive",
-  //       })
-  //     } finally {
-  //       setLoading(false)
-  //     }
-  //   }
-
-  //   fetchFreight()
-  // }, [user, router, id, toast])
-
-
-  // ✅ 1. Encapsular busca do frete numa função
-
-  useEffect(() => {
-      if (!isLoading && !user) {
-          toast({
-            title: "Erro",
-            description: "Usuário não autenticado",
-            variant: "destructive",
-            })
-            router.push("/dashboard")
-            return
-      }
-  }, [])
-
-const fetchFreight = useCallback(async () => {
-  if (!id) return
-
-  try {
-    // setLoading(true)
-
-    const data = await FreightRequestService.getFreightDetail(id)
-    if (!data) {
-      
-      toast({
-        title: "Erro",
-        description: "Frete não encontrado",
-        variant: "destructive",
-      })
-      router.push("/dashboard")
-      return
+  // helper seguro para formatar datas (evita new Date(undefined) crash)
+  const safeFormatDate = (value?: string | Date | null, locale = "pt-AO", opts?: Intl.DateTimeFormatOptions) => {
+    if (!value) return "-"
+    try {
+      const d = typeof value === "string" ? new Date(value) : value
+      if (Number.isNaN(d.getTime())) return "-"
+      return d.toLocaleDateString(locale, opts)
+    } catch {
+      return "-"
     }
-
-    setFreight(data)
-
-    // ✅ 2. Buscar localização no mapa
-    setIsLoadingMap(true)
-    const originCoords = await geocodeAddress(data.origin)
-    const destinationCoords = await geocodeAddress(data.destination)
-
-    const locations: MapLocation[] = []
-    if (originCoords) {
-      locations.push({
-        ...originCoords,
-        name: "Origem",
-        description: data.origin,
-        isOrigin: true,
-      })
-    }
-    if (destinationCoords) {
-      locations.push({
-        ...destinationCoords,
-        name: "Destino",
-        description: data.destination,
-        isDestination: true,
-      })
-    }
-
-    setMapLocations(locations)
-  } catch (error) {
-    console.error("Erro ao carregar frete:", error)
-    toast({
-      title: "Erro",
-      description: "Não foi possível carregar os detalhes do frete",
-      variant: "destructive",
-    })
-  } finally {
-    setIsLoadingMap(false)
-    setLoading(false)
-  }
-}, [id, router, toast])
-
-// ✅ 3. Efeito mais limpo e objetivo
-useEffect(() => {
-  // if (isLoading) return // ainda carregando user do contexto
-  // if (!user) return      // usuário não autenticado
-
-  fetchFreight()
-}, [user, isLoading, fetchFreight])
-
-
-  async function handleCancelFreight() {
-      try {
-      if (!cancelReason.trim()) {
-        toast({
-          title: "Erro",
-          description: "Por favor, informe o motivo do cancelamento.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      console.log("A Cancelar", id, "Motivo:", cancelReason);
-
-      // Envia a solicitação de frete para o Supabase com motivo
-      await FreightRequestService.cancel(id, { reason: cancelReason });
-
-      setIsDialogOpen(false);
-      router.push("/services/client/my-freights");
-    } catch (error) {
-      console.error("Erro ao cancelar:", error);
-      toast({
-        title: "Erro ao cancelar",
-        description: "Ocorreu um erro ao cancelar o seu pedido. Por favor, tente novamente.",
-        variant: "destructive",
-      });
-    }
-    }
-
-  if (loading || !freight) {
-  // if (loading || !freight) {
-    return (
-      <div className="container mx-auto py-10 px-4">
-        <div className="flex items-center gap-2 mb-8">
-          <Button variant="ghost" size="icon" asChild>
-            <Link href="/dashboard">
-              <ArrowLeft className="h-5 w-5" />
-            </Link>
-          </Button>
-          <h1 className="text-3xl font-bold">Carregando...</h1>
-        </div>
-
-        <div className="grid gap-6">
-          {Array(3)
-            .fill(0)
-            .map((_, i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <CardTitle className="h-6 bg-muted animate-pulse rounded"></CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {Array(4)
-                      .fill(0)
-                      .map((_, j) => (
-                        <div key={j} className="h-4 bg-muted animate-pulse rounded"></div>
-                      ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-        </div>
-      </div>
-    )
   }
 
-  const getStatusBadge = (status: string) => {
+  // badge helper (mantém sua UI)
+  const getStatusBadge = (status?: FreightStatus | string | null) => {
     switch (status) {
       case "PENDING":
         return (
@@ -383,10 +112,182 @@ useEffect(() => {
           </Badge>
         )
       default:
-        return <Badge variant="outline">{status}</Badge>
+        return <Badge variant="outline">{String(status ?? "-")}</Badge>
     }
   }
 
+  // buscar detalhes do frete
+  const fetchFreight = useCallback(async () => {
+    // proteção: só buscar se id existir
+    if (!id) {
+      toast?.({
+        title: "Erro",
+        description: "ID do frete ausente na rota.",
+        variant: "destructive",
+      })
+      router.replace("/dashboard")
+      return
+    }
+
+    try {
+      setLoading(true)
+      const data = await FreightRequestService.getFreightDetail(id)
+
+      if (!data) {
+        toast?.({
+          title: "Erro",
+          description: "Frete não encontrado.",
+          variant: "destructive",
+        })
+        router.replace("/dashboard")
+        return
+      }
+
+      setFreight(data)
+
+      // Geocodifica com fallback silencioso
+      try {
+        setIsLoadingMap(true)
+        setMapError(false)
+
+        const originCoords = await geocodeAddress(data.origin).catch((e) => {
+          console.warn("geocode origin failed", e)
+          return null
+        })
+        const destinationCoords = await geocodeAddress(data.destination).catch((e) => {
+          console.warn("geocode destination failed", e)
+          return null
+        })
+
+        const locations: MapLocation[] = []
+        if (originCoords) {
+          locations.push({
+            ...originCoords,
+            name: "Origem",
+            description: data.origin,
+            isOrigin: true,
+          })
+        }
+        if (destinationCoords) {
+          locations.push({
+            ...destinationCoords,
+            name: "Destino",
+            description: data.destination,
+            isDestination: true,
+          })
+        }
+
+        setMapLocations(locations)
+
+        if (!originCoords || !destinationCoords) {
+          // marca erro no mapa para habilitar fallback UI
+          setMapError(true)
+        }
+      } catch (err) {
+        console.error("Erro ao geocodificar:", err)
+        setMapError(true)
+      } finally {
+        setIsLoadingMap(false)
+      }
+    } catch (err) {
+      console.error("Erro ao carregar frete:", err)
+      toast?.({
+        title: "Erro",
+        description: "Não foi possível carregar os detalhes do frete.",
+        variant: "destructive",
+      })
+      router.replace("/dashboard")
+    } finally {
+      setLoading(false)
+    }
+  }, [id, router, toast])
+
+  // aguarda auth carregar — evita buscar antes do contexto pronto
+  useEffect(() => {
+    if (authLoading) return
+    // se não autenticado, redireciona
+    if (!user) {
+      toast?.({
+        title: "Erro",
+        description: "Usuário não autenticado.",
+        variant: "destructive",
+      })
+      router.replace("/login")
+      return
+    }
+    // busca frete quando tudo pronto
+    fetchFreight()
+  }, [authLoading, user, fetchFreight, router, toast])
+
+  // cancelar frete
+  const handleCancelFreight = async () => {
+    if (!id) return
+
+    if (!cancelReason.trim()) {
+      toast?.({
+        title: "Erro",
+        description: "Por favor, informe o motivo do cancelamento.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsDialogOpen(false)
+      // mostra loading local (opcional)
+      await FreightRequestService.cancel(id, { reason: cancelReason })
+      toast?.({
+        title: "Frete cancelado",
+        description: "Seu frete foi cancelado com sucesso.",
+      })
+      // atualiza estado local - refetch para garantir sincronia com backend
+      await fetchFreight()
+      // redireciona para lista de fretes do cliente (opcional)
+      router.replace("/services/client/my-freights")
+    } catch (err) {
+      console.error("Erro ao cancelar frete:", err)
+      toast?.({
+        title: "Erro ao cancelar",
+        description: "Ocorreu um erro ao cancelar. Tente novamente.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Loading skeleton
+  if (loading || !freight) {
+    return (
+      <div className="container mx-auto py-10 px-4">
+        <div className="flex items-center gap-2 mb-8">
+          <Button variant="ghost" size="icon" asChild>
+            <Link href="/dashboard">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+          </Button>
+          <h1 className="text-3xl font-bold">Carregando...</h1>
+        </div>
+
+        <div className="grid gap-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <CardTitle className="h-6 bg-muted animate-pulse rounded">&nbsp;</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {Array.from({ length: 4 }).map((_, j) => (
+                    <div key={j} className="h-4 bg-muted animate-pulse rounded" />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Render final (freight carregado)
   return (
     <div className="container mx-auto py-10 px-4">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
@@ -402,10 +303,11 @@ useEffect(() => {
               Frete #{id}
             </h1>
             <p className="text-muted-foreground">
-              Criado em {new Date(freight.createdAt).toLocaleDateString("pt-AO")}
+              Criado em {safeFormatDate(freight.createdAt)}
             </p>
           </div>
         </div>
+
         <div className="flex items-center gap-2">
           {getStatusBadge(freight.status)}
           <Button asChild>
@@ -416,10 +318,7 @@ useEffect(() => {
 
       {/* Cancelation Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent
-          className="fixed top-10 left-1/2 -translate-x-1/2 w-full max-w-md 
-                    bg-background rounded-2xl shadow-2xl border p-6 z-[9999]"
-        >
+        <DialogContent className="fixed top-10 left-1/2 -translate-x-1/2 w-full max-w-md bg-background rounded-2xl shadow-2xl border p-6 z-[9999]">
           <DialogHeader>
             <DialogTitle>Cancelar Frete</DialogTitle>
           </DialogHeader>
@@ -445,18 +344,19 @@ useEffect(() => {
         </DialogContent>
       </Dialog>
 
-
-{/* Dialog para mostrar motivo */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      {/* Reason dialog (read-only) */}
+      <Dialog open={openReasonDialog} onOpenChange={setOpenReasonDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Motivo do Cancelamento</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground whitespace-pre-line">
-            {freight.cancelReason || "Nenhum motivo informado."}
-          </p>
+
+          {/* <p className="text-sm text-muted-foreground whitespace-pre-line">
+            {freight.cancelationReason ?? "Nenhum motivo informado."}
+          </p> */}
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={() => setOpenReasonDialog(false)}>
               Fechar
             </Button>
           </DialogFooter>
@@ -485,13 +385,12 @@ useEffect(() => {
                       </h3>
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Endereço</p>
-                        <p>{freight.origin}</p>
+                        <p>{freight.origin ?? "-"}</p>
                         <p className="text-sm text-muted-foreground mt-2">Cidade/Província</p>
-                        <p>
-                          {freight.originState}
-                        </p>
+                        <p>{freight.originState ?? "-"}</p>
                       </div>
                     </div>
+
                     <div>
                       <h3 className="font-medium flex items-center gap-2 mb-3">
                         <MapPin className="h-5 w-5 text-primary" />
@@ -499,11 +398,9 @@ useEffect(() => {
                       </h3>
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Endereço</p>
-                        <p>{freight.destination}</p>
+                        <p>{freight.destination ?? "-"}</p>
                         <p className="text-sm text-muted-foreground mt-2">Cidade/Província</p>
-                        <p>
-                          {freight.destinationState}
-                        </p>
+                        <p>{freight.destinationState ?? "-"}</p>
                       </div>
                     </div>
                   </div>
@@ -518,13 +415,14 @@ useEffect(() => {
                       </h3>
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Tipo</p>
-                        <p>{freight.cargoType}</p>
+                        <p>{freight.cargoType ?? "-"}</p>
                         <p className="text-sm text-muted-foreground mt-2">Peso</p>
-                        <p>{freight.weightKg}</p>
+                        <p>{freight.weightKg ?? "-"}</p>
                         <p className="text-sm text-muted-foreground mt-2">Quantidade</p>
-                        <p>{freight.quantity}</p>
+                        <p>{freight.quantity ?? "-"}</p>
                       </div>
                     </div>
+
                     <div>
                       <h3 className="font-medium flex items-center gap-2 mb-3">
                         <Calendar className="h-5 w-5 text-primary" />
@@ -532,13 +430,14 @@ useEffect(() => {
                       </h3>
                       <div className="space-y-2">
                         <p className="text-sm text-muted-foreground">Coleta</p>
-                        <p>{new Date(freight.pickupDate).toLocaleDateString("pt-AO")}</p>
+                        <p>{safeFormatDate(freight.pickupDate)}</p>
                         <p className="text-sm text-muted-foreground mt-2">Entrega</p>
-                        <p>{new Date(freight.deliveryDate).toLocaleDateString("pt-AO")}</p>
+                        <p>{safeFormatDate(freight.deliveryDate)}</p>
                         <p className="text-sm text-muted-foreground mt-2">Preço</p>
-                        <p>{freight.price || 0 } KZ</p>
+                        <p>{typeof freight.price === "number" ? `${freight.price} KZ` : "-"}</p>
                       </div>
                     </div>
+
                     <div>
                       <h3 className="font-medium flex items-center gap-2 mb-3">
                         <FileText className="h-5 w-5 text-primary" />
@@ -592,15 +491,12 @@ useEffect(() => {
                       <div>
                         <p className="font-medium">Frete criado</p>
                         <p className="text-sm text-muted-foreground">
-                          {new Date(freight.createdAt).toLocaleDateString("pt-BR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
+                          {safeFormatDate(freight.createdAt, "pt-BR", { hour: "2-digit", minute: "2-digit" })}
                         </p>
                       </div>
                     </div>
 
-                    {(freight.status !== "PENDING" && freight.assignedTransporterId) && (
+                    {(freight.status !== "PENDING" && (freight as any).assignedTransporterId) && (
                       <div className="flex items-start gap-3">
                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
                           <Truck className="h-4 w-4 text-blue-600" />
@@ -608,7 +504,7 @@ useEffect(() => {
                         <div>
                           <p className="font-medium">Frete atribuído a transportador</p>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(freight.createdAt).toLocaleDateString("pt-AO", {
+                            {safeFormatDate(freight.pickupDate ?? freight.createdAt, "pt-AO", {
                               hour: "2-digit",
                               minute: "2-digit",
                             })}
@@ -625,10 +521,7 @@ useEffect(() => {
                         <div>
                           <p className="font-medium">Frete em trânsito</p>
                           <p className="text-sm text-muted-foreground">
-                            {new Date().toLocaleDateString("pt-AO", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {safeFormatDate(new Date(), "pt-AO", { hour: "2-digit", minute: "2-digit" })}
                           </p>
                         </div>
                       </div>
@@ -642,10 +535,7 @@ useEffect(() => {
                         <div>
                           <p className="font-medium">Frete entregue</p>
                           <p className="text-sm text-muted-foreground">
-                            {new Date().toLocaleDateString("pt-AO", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {safeFormatDate(new Date(), "pt-AO", { hour: "2-digit", minute: "2-digit" })}
                           </p>
                         </div>
                       </div>
@@ -658,12 +548,9 @@ useEffect(() => {
                         </div>
                         <div>
                           <p className="font-medium">Frete cancelado</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(freight.canceledAt).toLocaleDateString("pt-AO", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
+                          {/* <p className="text-sm text-muted-foreground">
+                            {safeFormatDate(freight.canceledAt)}
+                          </p> */}
                         </div>
                       </div>
                     )}
@@ -685,19 +572,18 @@ useEffect(() => {
                     <div className="h-[400px] flex items-center justify-center bg-muted rounded-md">
                       <p>Carregando mapa...</p>
                     </div>
-                  ) : mapLocations.length < 2 ? (
+                  ) : mapError || mapLocations.length < 2 ? (
                     <div className="h-[400px] flex items-center justify-center bg-muted rounded-md">
                       <p>Não foi possível carregar as localizações no mapa.</p>
                     </div>
                   ) : (
                     <MapView
                       locations={mapLocations}
-                      showRoute={true}
+                      showRoute
                       height="400px"
                       vehiclePosition={
-                        freight.status === "IN_PROGRESS"
+                        freight.status === "IN_PROGRESS" && mapLocations.length >= 2
                           ? {
-                              // Posição simulada do veículo (em uma implementação real, isso viria do rastreamento)
                               latitude: (mapLocations[0].latitude + mapLocations[1].latitude) / 2,
                               longitude: (mapLocations[0].longitude + mapLocations[1].longitude) / 2,
                               name: "Veículo em trânsito",
@@ -711,12 +597,11 @@ useEffect(() => {
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="bg-muted p-3 rounded-md">
                       <h4 className="text-sm font-medium mb-1">Distância Estimada</h4>
-                      <p className="text-xl">{freight.estimatedDistance} km</p>
+                      <p className="text-xl">{freight.estimatedDistance ?? "-" } km</p>
                     </div>
                     <div className="bg-muted p-3 rounded-md">
                       <h4 className="text-sm font-medium mb-1">Tempo Estimado</h4>
-                      <p className="text-xl">{freight.estimatedTime} horas</p>
-                      
+                      <p className="text-xl">{freight.estimatedTime ?? "-"} horas</p>
                     </div>
                   </div>
 
@@ -724,8 +609,7 @@ useEffect(() => {
                     <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
                       <h4 className="text-sm font-medium text-blue-700 mb-1">Informações de Rastreamento</h4>
                       <p className="text-sm">
-                        Veículo em trânsito. Previsão de chegada:{" "}
-                        {new Date(freight.deliveryDate).toLocaleDateString("pt-AO")}
+                        Veículo em trânsito. Previsão de chegada: {safeFormatDate(freight.deliveryDate)}
                       </p>
                     </div>
                   )}
@@ -746,31 +630,31 @@ useEffect(() => {
                   <User className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="font-medium">{userProfile.person.fullName}</p>
-                  <p className="text-sm text-muted-foreground">Cliente desde {new Date(user.createdAt).toLocaleDateString("pt-AO")}</p>
+                  <p className="font-medium">{userProfile?.person?.fullName ?? user?.name ?? "-"}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Cliente desde {safeFormatDate(user?.createdAt)}
+                  </p>
                 </div>
               </div>
+
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Email</span>
-                  <span>{userProfile.email}</span>
+                  <span>{userProfile?.email ?? user?.email ?? "-"}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Telefone</span>
-                  <span>{userProfile.person.phone}</span>
+                  <span>{userProfile?.person?.phone ?? user?.phone ?? "-"}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Empresa</span>
-                  <span>{userProfile.client.companyName}</span>
+                  <span>{userProfile?.client?.companyName ?? "-"}</span>
                 </div>
               </div>
-              {/*<Button variant="outline" className="w-full mt-4">
-                Contactar Cliente
-              </Button>*/}
             </CardContent>
           </Card>
 
-          {(freight.status !== "PENDING" && freight.assignedTransporterId)  && (
+          {(freight.status !== "PENDING" && (freight as any).assignedTransporterId) && (
             <Card>
               <CardHeader>
                 <CardTitle>Transportador</CardTitle>
@@ -781,21 +665,21 @@ useEffect(() => {
                     <Truck className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <p className="font-medium">{user.name}</p>
-                    <p className="text-sm text-muted-foreground">Transportador desde {new Date(user.createdAt).toLocaleDateString("pt-BR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}</p>
+                    <p className="font-medium">{(freight as any).transporterName ?? "-"}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Transportador desde {safeFormatDate((freight as any).transporterCreatedAt)}
+                    </p>
                   </div>
                 </div>
+
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Email</span>
-                    <span>{user.email}</span>
+                    <span>{(freight as any).transporterEmail ?? "-"}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Telefone</span>
-                    <span>{user.phone}</span>
+                    <span>{(freight as any).transporterPhone ?? "-"}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Avaliação</span>
@@ -807,9 +691,6 @@ useEffect(() => {
                     </span>
                   </div>
                 </div>
-                {/*<Button variant="outline" className="w-full mt-4">
-                  Contactar Transportador
-                </Button>*/}
               </CardContent>
             </Card>
           )}
@@ -821,10 +702,14 @@ useEffect(() => {
             <CardContent className="space-y-2">
               {freight.status === "PENDING" && (
                 <>
-                  {/*<Button className="w-full">Ver Propostas</Button>*/}
-                    <Button variant="outline" className="w-full" onClick={() => router.push(`/services/client/freight/edit/${id}`)}>
-                      Editar Frete
-                    </Button>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push(`/services/client/freight/edit/${id}`)}
+                  >
+                    Editar Frete
+                  </Button>
+
                   <Button onClick={() => setIsDialogOpen(true)} variant="destructive" className="w-full">
                     Cancelar Frete
                   </Button>
@@ -834,12 +719,8 @@ useEffect(() => {
               {freight.status === "ACCEPTED" && (
                 <>
                   <Button className="w-full">Ver Detalhes do Contrato</Button>
-                  <Button variant="outline" className="w-full">
-                    Contactar Transportador
-                  </Button>
-                  <Button variant="destructive" className="w-full">
-                    Reportar Problema
-                  </Button>
+                  <Button variant="outline" className="w-full">Contactar Transportador</Button>
+                  <Button variant="destructive" className="w-full">Reportar Problema</Button>
                 </>
               )}
 
@@ -848,60 +729,47 @@ useEffect(() => {
                   <Button className="w-full" asChild>
                     <Link href={`/services/client/tracking?id=${id}`}>Rastrear Frete</Link>
                   </Button>
-                  <Button variant="outline" className="w-full">
-                    Contactar Transportador
-                  </Button>
-                  <Button variant="destructive" className="w-full">
-                    Reportar Problema
-                  </Button>
+                  <Button variant="outline" className="w-full">Contactar Transportador</Button>
+                  <Button variant="destructive" className="w-full">Reportar Problema</Button>
                 </>
               )}
 
               {freight.status === "COMPLETED" && (
                 <>
                   <Button className="w-full">Avaliar Transportador</Button>
-                  <Button variant="outline" className="w-full">
-                    Ver Recibo
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    Solicitar Novo Frete
-                  </Button>
+                  <Button variant="outline" className="w-full">Ver Recibo</Button>
+                  <Button variant="outline" className="w-full">Solicitar Novo Frete</Button>
                 </>
               )}
 
               {freight.status === "CANCELED" && (
                 <>
                   <Button className="w-full">Criar Novo Frete</Button>
-                  <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setShowReason(!showReason)}
-                    >
-                      {showReason ? "Esconder Motivo" : "Ver Motivo do Cancelamento"}
-                    </Button>
+                  {/* <Button variant="outline" className="w-full" onClick={() => setShowReasonInline(!showReason)}>
+                    {showReasonInline ? "Esconder Motivo" : "Ver Motivo do Cancelamento"}
+                  </Button> */}
 
-                    {showReason && (
-                      <div className="mt-2 p-4 rounded-lg border bg-muted text-sm text-muted-foreground">
-                        {freight.cancelationReason || "Nenhum motivo informado"}
-                      </div>
-                    )}
+                  {showReasonInline && (
+                    <div className="mt-2 p-4 rounded-lg border bg-muted text-sm text-muted-foreground">
+                      Nenhum motivo informado
+                      {/* {freight.cancelationReason ?? "Nenhum motivo informado"} */}
+                    </div>
+                  )}
                 </>
               )}
-              
             </CardContent>
           </Card>
-
-          
         </div>
       </div>
     </div>
   )
 }
 
+/**
+ * Export default page wrapper — mantém um small wrapper para possível proteção (ProtectedRoute)
+ * Se no futuro quiser trocar por Server Component para SSR, dá pra extrair a fetch para server.
+ */
 export default function FreightDetailsPage() {
-  return (
-    // <ProtectedRoute>
-      <FreightDetailsContent />
-    // </ProtectedRoute>
-  )
+  return <FreightDetailsContent />
 }
+

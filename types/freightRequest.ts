@@ -52,4 +52,5 @@ export interface FreightRequest {
   estimatedTime: number;
   createdAt: string;
   updatedAt: string;
+  status?: string
 }
