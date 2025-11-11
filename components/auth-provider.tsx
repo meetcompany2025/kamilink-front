@@ -1,19 +1,21 @@
 "use client"
 
-import { 
+import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
-  useState 
+  useState,
+  ReactNode
 } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Cookies from "js-cookie"
 import { AuthService } from "@/services/authService"
 import { UserService } from "@/services/userService"
+import { Loader2 } from "lucide-react"
 
-// 🔹 Tipos do contexto (pode refinar depois)
+// 🔹 Tipagem do contexto
 interface AuthContextProps {
   user: any | null
   userProfile: any | null
@@ -28,7 +30,7 @@ interface AuthContextProps {
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<any | null>(null)
   const [userProfile, setUserProfile] = useState<any | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -46,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(message)
   }, [])
 
-  // ✅ Pega token de forma segura
+  // ✅ Obtém token de forma segura
   const getToken = useCallback(() => {
     if (typeof window === "undefined") return null
     return (
@@ -57,80 +59,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     )
   }, [])
 
-  // ✅ Busca perfil do usuário
-  // const fetchUserProfile = useCallback(async () => {
-  //   const token = getToken()
-  //   if (!token) {
-  //     setUser(null)
-  //     setUserProfile(null)
-  //     return
-  //   }
-
-  //   try {
-  //     const userData = await AuthService.me(token)
-  //     setUser(userData)
-
-  //     const profile = await UserService.findById(userData.id)
-  //     setUserProfile(profile)
-  //   } catch (error) {
-  //     handleError(error, "fetch profile")
-  //     setUser(null)
-  //     setUserProfile(null)
-  //   }
-  // }, [getToken, handleError])
-
-//   const fetchUserProfile = useCallback(async () => {
-//   const token = getToken()
-//   if (!token) {
-//     // usuário não logado → não é erro
-//     setUser(null)
-//     setUserProfile(null)
-//     return
-//   }
-
-//   try {
-//     const userData = await AuthService.me(token)
-//     setUser(userData)
-
-//     const profile = await UserService.findById(userData.id)
-//     setUserProfile(profile)
-//   } catch (error) {
-//     // ⚠ Só mostra erro se existir token (ou seja, tinha intenção de estar logado)
-//     if (token) handleError(error, "fetch profile")
-//     setUser(null)
-//     setUserProfile(null)
-//   }
-// }, [getToken, handleError])
-
-const fetchUserProfile = useCallback(async () => {
-  const token = getToken()
-  if (!token) {
-    setUser(null)
-    setUserProfile(null)
-    setIsLoading(false)
-    return
-  }
-
-  try {
-    const userData = await AuthService.me(token)
-    setUser(userData)
-
-    if (userData?.id) {
-      const profile = await UserService.findById(userData.id)
-      setUserProfile(profile)
+  // ✅ Busca o perfil do usuário autenticado
+  const fetchUserProfile = useCallback(async () => {
+    const token = getToken()
+    if (!token) {
+      setUser(null)
+      setUserProfile(null)
+      setIsLoading(false)
+      return
     }
-  } catch (error) {
-    handleError(error, "fetch profile")
-    setUser(null)
-    setUserProfile(null)
-  } finally {
-    setIsLoading(false)
-  }
-}, [getToken, handleError])
 
+    try {
+      const userData = await AuthService.me(token)
+      setUser(userData)
 
+      if (userData?.id) {
+        const profile = await UserService.findById(userData.id)
+        setUserProfile(profile)
+      }
+    } catch (error) {
+      handleError(error, "fetch profile")
+      setUser(null)
+      setUserProfile(null)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [getToken, handleError])
 
-  // ✅ Executa ao carregar a aplicação
+  // ✅ Inicializa sessão ao carregar o app
   useEffect(() => {
     const init = async () => {
       setIsLoading(true)
@@ -140,7 +96,14 @@ const fetchUserProfile = useCallback(async () => {
     init()
   }, [fetchUserProfile])
 
-  // ✅ Função unificada de login
+  // ✅ Logout automático em caso de token inválido/expirado
+  useEffect(() => {
+    if (error && (error.toLowerCase().includes("token") || error.toLowerCase().includes("expirado"))) {
+      signOut()
+    }
+  }, [error])
+
+  // ✅ Função base para login (e-mail ou telefone)
   const handleLogin = useCallback(
     async (credentials: { email?: string; phone?: string; password: string; rememberMe?: boolean }) => {
       try {
@@ -161,9 +124,11 @@ const fetchUserProfile = useCallback(async () => {
 
         const userData = await AuthService.me(res.token)
         setUser(userData)
+
         const profile = await UserService.findById(userData.id)
         setUserProfile(profile)
 
+        // Redirecionamento inteligente
         const redirectTo = searchParams.get("redirectTo")
         if (redirectTo) {
           router.replace(redirectTo)
@@ -175,11 +140,7 @@ const fetchUserProfile = useCallback(async () => {
               ? "/dashboard/client"
               : "/dashboard/admin"
 
-              setTimeout(() => {
-                router.replace(dashboardPath)
-              }, 500)
-          //
-          router.replace(dashboardPath)
+          setTimeout(() => router.replace(dashboardPath), 300)
         }
       } catch (error) {
         handleError(error, "login")
@@ -188,19 +149,19 @@ const fetchUserProfile = useCallback(async () => {
         setIsLoading(false)
       }
     },
-    [clearError, handleError, router, searchParams],
+    [clearError, handleError, router, searchParams]
   )
 
   const signInWithEmail = useCallback(
     async (email: string, password: string, rememberMe: boolean) =>
       handleLogin({ email, password, rememberMe }),
-    [handleLogin],
+    [handleLogin]
   )
 
   const signInWithPhone = useCallback(
     async (phone: string, password: string, rememberMe: boolean) =>
       handleLogin({ phone, password, rememberMe }),
-    [handleLogin],
+    [handleLogin]
   )
 
   // ✅ Logout seguro
@@ -217,12 +178,7 @@ const fetchUserProfile = useCallback(async () => {
       setUser(null)
       setUserProfile(null)
 
-      // router.replace("/login")
-
-      setTimeout(() => {
-        router.replace("/login")
-      }, 100)
-
+      setTimeout(() => router.replace("/login"), 100)
       setIsLoading(false)
     }
   }, [router])
@@ -231,6 +187,7 @@ const fetchUserProfile = useCallback(async () => {
     await fetchUserProfile()
   }, [fetchUserProfile])
 
+  // ✅ Memo do contexto (otimizado)
   const value = useMemo(
     () => ({
       user,
@@ -243,27 +200,27 @@ const fetchUserProfile = useCallback(async () => {
       refreshProfile,
       clearError,
     }),
-    [
-      user,
-      userProfile,
-      isLoading,
-      error,
-      signInWithEmail,
-      signInWithPhone,
-      signOut,
-      refreshProfile,
-      clearError,
-    ],
+    [user, userProfile, isLoading, error]
   )
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider value={value}>
+      {isLoading && !user ? (
+        <div className="flex items-center justify-center h-screen">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <span className="ml-2">Carregando...</span>
+          {/* <span className="ml-2">Verificando sessão...</span> */}
+        </div>
+      ) : (
+        children
+      )}
+    </AuthContext.Provider>
+  )
 }
 
-// ✅ Hook seguro
+// ✅ Hook de acesso ao contexto
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
+  if (!context) throw new Error("useAuth must be used within an AuthProvider")
   return context
 }

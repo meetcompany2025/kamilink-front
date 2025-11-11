@@ -1,55 +1,88 @@
-"use client";
+"use client"
 
-import Cookies from "js-cookie";
+import Cookies from "js-cookie"
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+// ✅ Base URL da API
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000"
 
-type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
+// ✅ Tipos de método HTTP suportados
+type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH"
 
-async function request(
+// ✅ Interface que simula a estrutura de resposta do Axios
+export interface ApiResponse<T = any> {
+  data: T
+  status: number
+  ok: boolean
+  headers?: Headers
+}
+
+// ✅ Configuração opcional para requisições (parecido com AxiosRequestConfig)
+interface RequestConfig {
+  headers?: Record<string, string>
+  auth?: boolean
+  noJson?: boolean // útil se quiser enviar FormData
+}
+
+// ✅ Função base de requisição
+async function request<T = any>(
   url: string,
   method: HttpMethod,
   data?: any,
-  auth: boolean = true
-) {
-  const token = Cookies.get("token");
+  config: RequestConfig = {}
+): Promise<ApiResponse<T>> {
+  const { headers: customHeaders = {}, auth = true, noJson = false } = config
 
+  const token = Cookies.get("token")
+
+  // ✅ Headers padrão
   const headers: HeadersInit = {
-    "Content-Type": "application/json",
-  };
-
-  if (auth && token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    ...(noJson ? {} : { "Content-Type": "application/json" }),
+    ...customHeaders,
   }
 
-  const res = await fetch(`${BASE_URL}${url}`, {
+  // ✅ Adiciona Authorization se necessário
+  if (auth && token) {
+    headers["Authorization"] = `Bearer ${token}`
+  }
+
+  // ✅ Monta opções do fetch
+  const options: RequestInit = {
     method,
     headers,
-    credentials: "omit",
-    body: data ? JSON.stringify(data) : undefined,
-  });
-
-  let responseData: any = null;
-  try {
-    responseData = await res.json();
-  } catch {
-    responseData = null;
+    credentials: "omit", // não envia cookies automáticos
   }
 
-  // Mantém padrão axios: res.data, res.status
+  if (data) {
+    options.body = noJson ? data : JSON.stringify(data)
+  }
+
+  // ✅ Faz requisição
+  const res = await fetch(`${BASE_URL}${url}`, options)
+
+  // ✅ Tenta converter a resposta em JSON (mesmo que erro)
+  let responseData: any = null
+  try {
+    responseData = await res.json()
+  } catch {
+    responseData = null
+  }
+
+  // ✅ Retorna no formato Axios-like
   return {
     data: responseData,
     status: res.status,
     ok: res.ok,
-  };
+    headers: res.headers,
+  }
 }
 
+// ✅ API simplificada, compatível com AuthService
 const api = {
-  get: (url: string, auth = true) => request(url, "GET", undefined, auth),
-  post: (url: string, data?: any, auth = true) => request(url, "POST", data, auth),
-  put: (url: string, data?: any, auth = true) => request(url, "PUT", data, auth),
-  patch: (url: string, data?: any, auth = true) => request(url, "PATCH", data, auth),
-  delete: (url: string, auth = true) => request(url, "DELETE", undefined, auth),
-};
+  get: <T = any>(url: string, config?: RequestConfig) => request<T>(url, "GET", undefined, config),
+  post: <T = any>(url: string, data?: any, config?: RequestConfig) => request<T>(url, "POST", data, config),
+  put: <T = any>(url: string, data?: any, config?: RequestConfig) => request<T>(url, "PUT", data, config),
+  patch: <T = any>(url: string, data?: any, config?: RequestConfig) => request<T>(url, "PATCH", data, config),
+  delete: <T = any>(url: string, config?: RequestConfig) => request<T>(url, "DELETE", undefined, config),
+}
 
-export default api;
+export default api

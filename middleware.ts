@@ -1,75 +1,53 @@
-// middleware.ts
-import { NextRequest, NextResponse } from "next/server";
-import { jwtDecode } from "jwt-decode";
+import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
+import { jwtDecode } from "jwt-decode"
 
 const publicRoutes = [
   "/",
   "/login",
   "/register",
   "/forgot-password",
-  "/reset-password",
+  "/privacy",
   "/about",
-  "/contact",
   "/services/main",
   "/help",
-];
+  "/terms",
+]
 
-// ✅ Qualquer rota que COMEÇA com esses prefixos será privada
-const protectedPrefixes = [
-  "/dashboard",
-  "/services",  // Isto cobre /services/x, /services/client/123, etc.
-  "/profile",
-];
+// 🔹 Verifica se a rota é privada (inclusive dinâmicas)
+function isProtectedRoute(pathname: string) {
+  if (publicRoutes.some(route => pathname.startsWith(route))) return false
 
-export default function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  const authToken = request.cookies.get("token")?.value;
+  // Qualquer coisa dentro de /dashboard, /services, /profile, etc é privada
+  const privatePrefixes = ["/dashboard", "/services", "/profile", "/admin"]
+  return privatePrefixes.some(prefix => pathname.startsWith(prefix))
+}
 
-  // ✅ Verifica se a rota é pública (exata)
-  const isPublicRoute = publicRoutes.some(route => pathname === route);
+export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl
+  const token = req.cookies.get("token")?.value
 
-  // ✅ Verifica se a rota é protegida (prefixo, pega também rotas dinâmicas)
-  const isProtectedRoute = protectedPrefixes.some(prefix =>
-    pathname.startsWith(prefix) || pathname === prefix+"/"
-  );
+  if (isProtectedRoute(pathname)) {
+    if (!token) {
+      const loginUrl = new URL("/login", req.url)
+      loginUrl.searchParams.set("redirectTo", pathname)
+      return NextResponse.redirect(loginUrl)
+    }
 
-  // ✅ Se rota pública → deixa passar SEM token
-  if (isPublicRoute) return NextResponse.next();
-
-  // ✅ Se rota protegida e não tem token → redireciona login
-  if (isProtectedRoute && !authToken) {
-    return NextResponse.redirect(new URL("/login", request.url));
-  }
-
-  // ✅ Se tem token → validar expiração e tratar redirecionamentos
-  if (authToken) {
     try {
-      const decoded: any = jwtDecode(authToken);
-      const expired = decoded.exp * 1000 < Date.now();
-
-      if (expired) {
-        const res = NextResponse.redirect(new URL("/login", request.url));
-        res.cookies.delete("token");
-        res.cookies.delete("refresh_token");
-        return res;
-      }
-
-      // Se logado e tentar ir para login ou register → mandar para dashboard
-      if (["/login", "/register"].includes(pathname)) {
-        return NextResponse.redirect(new URL("/dashboard", request.url));
-      }
-    } catch (err) {
-      const res = NextResponse.redirect(new URL("/login", request.url));
-      res.cookies.delete("token");
-      return res;
+      jwtDecode(token) // apenas valida formato básico
+    } catch {
+      const loginUrl = new URL("/login", req.url)
+      loginUrl.searchParams.set("redirectTo", pathname)
+      return NextResponse.redirect(loginUrl)
     }
   }
 
-  return NextResponse.next();
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|ico)$).*)",
-  ],
-};
+  matcher: ["/((?!_next|api|favicon.ico).*)"],
+}
+
+//  "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|ico)$).*)",
