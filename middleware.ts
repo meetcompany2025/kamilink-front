@@ -22,10 +22,9 @@ function isProtectedRoute(pathname: string) {
   const privatePrefixes = [
     "/dashboard", 
     "/services", 
-    "/services/freights", 
-    "/services/freight", 
-    "/freight", 
-    "/freights", 
+    "/services/client/freight", 
+    "/services/client/freight/", 
+    "/services/transporter/freight", 
     "/profile", 
     "/admin",
   ]
