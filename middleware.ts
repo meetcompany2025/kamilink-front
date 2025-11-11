@@ -19,7 +19,16 @@ function isProtectedRoute(pathname: string) {
   if (publicRoutes.some(route => pathname.startsWith(route))) return false
 
   // Qualquer coisa dentro de /dashboard, /services, /profile, etc é privada
-  const privatePrefixes = ["/dashboard", "/services", "/profile", "/admin"]
+  const privatePrefixes = [
+    "/dashboard", 
+    "/services", 
+    "/services/freights", 
+    "/services/freight", 
+    "/freight", 
+    "/freights", 
+    "/profile", 
+    "/admin",
+  ]
   return privatePrefixes.some(prefix => pathname.startsWith(prefix))
 }
 
