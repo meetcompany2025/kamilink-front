@@ -19,15 +19,15 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@rad   ix-ui/react-icons'],
     forceSwcTransforms: true, 
-    swcLoader: 'wasm',
+    // swcLoader: 'wasm',
   },
 
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
 
-  reactStrictMode: true,
-  swcMinify: true,
+  // reactStrictMode: true,
+  // swcMinify: true,
 };
 
 export default nextConfig;
