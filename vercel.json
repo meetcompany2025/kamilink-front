@@ -1,5 +1,14 @@
 {
     "rewrites": [{ "source":"/(.*)", "destination":"/"}],
+    "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "routes": [
+    {
+      "src": "/services/freight/(.*)",
+      "dest": "/services/freight/$1"
+    }
+  ],
     "headers": [
         {
           "source": "/(.*)",
