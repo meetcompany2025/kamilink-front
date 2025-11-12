@@ -14,6 +14,7 @@ import { getFreightRequestByTrackingNumber } from "@/lib/supabase/freight"
 import { MapView, type MapLocation } from "@/components/map/transport-map-view"
 import { geocodeAddress, generateRoutePoints } from "@/lib/geo-utils"
 import { FreightRequestService } from "@/services/freightRequestService"
+import { GoogleMapsProvider } from "@/components/google-maps-provider"
 
 
 function TrackingContent() {
@@ -536,8 +537,10 @@ function TrackingContent() {
 
 export default function TrackingPage() {
   return (
+  <GoogleMapsProvider>
     <Suspense fallback={<div>Carregando autenticação...</div>}>
       <TrackingContent />
     </Suspense>
+  </GoogleMapsProvider>
   )
 }
