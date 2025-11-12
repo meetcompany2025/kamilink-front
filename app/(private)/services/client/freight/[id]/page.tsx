@@ -237,7 +237,7 @@ export function FreightDetailsContent() {
     try {
       setIsDialogOpen(false)
       // mostra loading local (opcional)
-      await FreightRequestService.cancel(id, { reason: cancelReason })
+      await FreightRequestService.cancel(id)
       toast?.({
         title: "Frete cancelado",
         description: "Seu frete foi cancelado com sucesso.",

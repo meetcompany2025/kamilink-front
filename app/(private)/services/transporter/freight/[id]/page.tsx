@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, use } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/components/ui/use-toast"
 import { useAuth } from "@/components/auth-provider"
-//import { getFreightRequestById } from "@/lib/supabase/freight"
 import { FreightRequestService } from "@/services/freightRequestService"
 import {
   ArrowLeft,
@@ -29,21 +28,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DialogHeader, DialogFooter } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogTitle } from "@radix-ui/react-dialog"
+import { useParams } from "next/navigation"
 
-
-export default function FreightDetailsPage({ params }: { params: { id: string } }) {
+export default function FreightDetailsPage() {
+// export default function FreightDetailsPage({ params }: { params: { id: string } }) {
   const [freight, setFreight] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [mapLocations, setMapLocations] = useState<MapLocation[]>([])
   const [isLoadingMap, setIsLoadingMap] = useState(false)
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [cancelReason, setCancelReason] = useState("");
-  const [open, setOpen] = useState(false);
-  const [showReason, setShowReason] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [open, setOpen] = useState(false)
+  const [showReason, setShowReason] = useState(false)
   const { user, userProfile } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
-  const { id } = params;
+  // const { id } = params
+  const { id } = useParams() as { id?: string } // id pode vir undefined
 
   useEffect(() => {
     if (!user) {
@@ -66,37 +67,29 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
         }
         setFreight(data)
 
-        console.log(data)
-
         // Geocodificar endereços para o mapa
         setIsLoadingMap(true)
         try {
-          const originAddress = `${data.origin}`
-          const destinationAddress = `${data.destination}`
-
-          const originCoords = await geocodeAddress(originAddress)
-          const destinationCoords = await geocodeAddress(destinationAddress)
+          const originCoords = await geocodeAddress(`${data.origin}`)
+          const destinationCoords = await geocodeAddress(`${data.destination}`)
 
           const locations: MapLocation[] = []
-
           if (originCoords) {
             locations.push({
               ...originCoords,
               name: "Origem",
-              description: originAddress,
+              description: data.origin,
               isOrigin: true,
             })
           }
-
           if (destinationCoords) {
             locations.push({
               ...destinationCoords,
               name: "Destino",
-              description: destinationAddress,
+              description: data.destination,
               isDestination: true,
             })
           }
-
           setMapLocations(locations)
         } catch (error) {
           console.error("Erro ao geocodificar endereços:", error)
@@ -124,64 +117,83 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
   }, [user, router, id, toast])
 
 
-  async function handleCancelFreight() {
-      try {
-      if (!cancelReason.trim()) {
-        toast({
-          title: "Erro",
-          description: "Por favor, informe o motivo do cancelamento.",
-          variant: "destructive",
-        });
-        return;
-      }
+// Iniciar frete
+async function handleStart() {
+  try {
+    const updatedFreight = await FreightRequestService.accept(id)
+    // setFreight(updatedFreight)
+    router.push("/services/transporter/my-freights");
+    toast({
+      title: "Sucesso",
+      description: "Frete iniciado com sucesso!",
+    })
+    // Opcional: redirecionar para página de rastreio
+    // router.push(`/services/tracking?id=${id}`)
+  } catch (error) {
+    console.error("Erro ao iniciar frete:", error)
+    toast({
+      title: "Erro ao iniciar",
+      description: "Ocorreu um erro ao iniciar o frete. Tente novamente.",
+      variant: "destructive",
+    })
+  }
+}
+ 
+// Finalizar frete
+async function handleComplete() {
+  try {
+    const updatedFreight = await FreightRequestService.finish(id)
+     // setFreight(updatedFreight)
+    router.push("/services/transporter/my-freights");
+    toast({
+      title: "Sucesso",
+      description: "Frete finalizado com sucesso!",
+    })
+    // Aqui faz sentido redirecionar para a lista de fretes concluídos
+    router.push("/services/transporter/my-freights")
+  } catch (error) {
+    console.error("Erro ao finalizar frete:", error)
+    toast({
+      title: "Erro ao finalizar",
+      description: "Ocorreu um erro ao finalizar o frete. Tente novamente.",
+      variant: "destructive",
+    })
+  }
+}
 
-      console.log("A Cancelar", id, "Motivo:", cancelReason);
 
-      // Envia a solicitação de frete para o Supabase com motivo
-      await FreightRequestService.cancel(id, { reason: cancelReason });
-
-      setIsDialogOpen(false);
-      router.push("/services/client/my-freights");
-    } catch (error) {
-      console.error("Erro ao cancelar:", error);
+// Cancelar frete
+async function handleCancelFreight() {
+  try {
+    if (!cancelReason.trim()) {
       toast({
-        title: "Erro ao cancelar",
-        description: "Ocorreu um erro ao cancelar o seu pedido. Por favor, tente novamente.",
+        title: "Erro",
+        description: "Por favor, informe o motivo do cancelamento.",
         variant: "destructive",
-      });
-    }
-    }
-
-    async function handleStart() {
-          try {
-      
-            await FreightRequestService.start(id);
-          
-            router.push("/services/transporter/my-freights");
-          } catch (error) {
-            toast({
-              title: "Erro ao iniciar",
-              description: ".",
-              variant: "destructive",
-            });
-          }
+      })
+      return
     }
 
-    async function handleComplete() {
-        try {
-  
-        // Envia a solicitação de frete para o Supabase com motivo
-        await FreightRequestService.finish(id);
-  
-        router.push("/services/transporter/my-freights");
-      } catch (error) {
-        toast({
-          title: "Erro ao finalizar",
-          description: "Ocorreu um erro ao cancelar o seu pedido. Por favor, tente novamente.",
-          variant: "destructive",
-        });
-      }
-    }
+    const updatedFreight = await FreightRequestService.cancel(id)
+     // setFreight(updatedFreight)
+    router.push("/services/transporter/my-freights");
+    setIsDialogOpen(false)
+    toast({
+      title: "Frete cancelado",
+      description: "O frete foi cancelado com sucesso.",
+    })
+
+    // Redirecionar para a lista de fretes do cliente
+    router.push("/services/client/my-freights")
+  } catch (error) {
+    console.error("Erro ao cancelar frete:", error)
+    toast({
+      title: "Erro ao cancelar",
+      description: "Ocorreu um erro ao cancelar o frete. Tente novamente.",
+      variant: "destructive",
+    })
+  }
+}
 
   if (loading || !freight) {
     return (
@@ -194,63 +206,22 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
           </Button>
           <h1 className="text-3xl font-bold">Carregando...</h1>
         </div>
-
-        <div className="grid gap-6">
-          {Array(3)
-            .fill(0)
-            .map((_, i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <CardTitle className="h-6 bg-muted animate-pulse rounded"></CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {Array(4)
-                      .fill(0)
-                      .map((_, j) => (
-                        <div key={j} className="h-4 bg-muted animate-pulse rounded"></div>
-                      ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-        </div>
       </div>
     )
   }
 
-  const getStatusBadge = (status: string) => {
+    const getStatusBadge = (status: string) => {
     switch (status) {
       case "PENDING":
-        return (
-          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-            Pendente
-          </Badge>
-        )
+        return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Pendente</Badge>
       case "ACCEPTED":
-        return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-            Atribuído
-          </Badge>
-        )
+        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Aceite</Badge>
       case "IN_PROGRESS":
-        return (
-          <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
-            Em Trânsito
-          </Badge>
-        )
+        return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Em Andamento</Badge>
       case "COMPLETED":
-        return (
-          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-            Entregue
-          </Badge>
-        )
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Entregue</Badge>
       case "CANCELED":
-        return (
-          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-            Cancelado
-          </Badge>
-        )
+        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Cancelado</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -285,10 +256,7 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
 
       {/* Cancelation Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent
-          className="fixed top-10 left-1/2 -translate-x-1/2 w-full max-w-md 
-                    bg-background rounded-2xl shadow-2xl border p-6 z-[9999]"
-        >
+        <DialogContent className="fixed top-10 left-1/2 -translate-x-1/2 w-full max-w-md bg-background rounded-2xl shadow-2xl border p-6 z-[9999]">
           <DialogHeader>
             <DialogTitle>Cancelar Frete</DialogTitle>
           </DialogHeader>
@@ -304,18 +272,13 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
           />
 
           <DialogFooter className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Voltar
-            </Button>
-            <Button variant="destructive" onClick={handleCancelFreight}>
-              Confirmar Cancelamento
-            </Button>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Voltar</Button>
+            <Button variant="destructive" onClick={handleCancelFreight}>Confirmar Cancelamento</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-
-{/* Dialog para mostrar motivo */}
+      {/* Dialog para mostrar motivo */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -325,9 +288,7 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
             {freight.cancelReason || "Nenhum motivo informado."}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Fechar
-            </Button>
+            <Button variant="outline" onClick={() => setOpen(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -341,6 +302,7 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
             </TabsList>
 
             <TabsContent value="details">
+              {/* Detalhes do Frete */}
               <Card>
                 <CardHeader>
                   <CardTitle>Detalhes do Frete</CardTitle>
@@ -349,194 +311,72 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <h3 className="font-medium flex items-center gap-2 mb-3">
-                        <MapPin className="h-5 w-5 text-primary" />
-                        Origem
+                        <MapPin className="h-5 w-5 text-primary" />Origem
                       </h3>
-                      <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">Endereço</p>
-                        <p>{freight.origin}</p>
-                        <p className="text-sm text-muted-foreground mt-2">Cidade/Província</p>
-                        <p>
-                          {freight.originState}
-                        </p>
-                      </div>
+                      <p>{freight.origin} - {freight.originState}</p>
                     </div>
                     <div>
                       <h3 className="font-medium flex items-center gap-2 mb-3">
-                        <MapPin className="h-5 w-5 text-primary" />
-                        Destino
+                        <MapPin className="h-5 w-5 text-primary" />Destino
                       </h3>
-                      <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">Endereço</p>
-                        <p>{freight.destination}</p>
-                        <p className="text-sm text-muted-foreground mt-2">Cidade/Província</p>
-                        <p>
-                          {freight.destinationState}
-                        </p>
-                      </div>
+                      <p>{freight.destination} - {freight.destinationState}</p>
                     </div>
                   </div>
 
                   <Separator className="my-6" />
-
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
-                      <h3 className="font-medium flex items-center gap-2 mb-3">
-                        <Package className="h-5 w-5 text-primary" />
-                        Carga
-                      </h3>
-                      <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">Tipo</p>
-                        <p>{freight.cargoType}</p>
-                        <p className="text-sm text-muted-foreground mt-2">Peso</p>
-                        <p>{freight.weightKg}</p>
-                        <p className="text-sm text-muted-foreground mt-2">Quantidade</p>
-                        <p>{freight.quantity}</p>
-                      </div>
+                      <h3 className="font-medium mb-2"><Package className="h-5 w-5 text-primary" />Carga</h3>
+                      <p>Tipo: {freight.cargoType}</p>
+                      <p>Peso: {freight.weightKg}</p>
+                      <p>Quantidade: {freight.quantity}</p>
                     </div>
                     <div>
-                      <h3 className="font-medium flex items-center gap-2 mb-3">
-                        <Calendar className="h-5 w-5 text-primary" />
-                        Datas
-                      </h3>
-                      <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground">Coleta</p>
-                        <p>{new Date(freight.pickupDate).toLocaleDateString("pt-AO")}</p>
-                        <p className="text-sm text-muted-foreground mt-2">Entrega</p>
-                        <p>{new Date(freight.deliveryDate).toLocaleDateString("pt-AO")}</p>
-                        <p className="text-sm text-muted-foreground mt-2">Preço</p>
-                        <p>{freight.price || 0 } KZ</p>
-                      </div>
+                      <h3 className="font-medium mb-2"><Calendar className="h-5 w-5 text-primary" />Datas</h3>
+                      <p>Coleta: {new Date(freight.pickupDate).toLocaleDateString("pt-AO")}</p>
+                      <p>Entrega: {new Date(freight.deliveryDate).toLocaleDateString("pt-AO")}</p>
+                      <p>Preço: {freight.price || 0} KZ</p>
                     </div>
                     <div>
-                      <h3 className="font-medium flex items-center gap-2 mb-3">
-                        <FileText className="h-5 w-5 text-primary" />
-                        Requisitos
-                      </h3>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-4 h-4 rounded-full ${freight.requiresLoadingHelp ? "bg-green-500" : "bg-red-500"}`}
-                          ></div>
-                          <p>Ajuda na carga</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-4 h-4 rounded-full ${freight.requiresUnloadingHelp ? "bg-green-500" : "bg-red-500"}`}
-                          ></div>
-                          <p>Ajuda na descarga</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-4 h-4 rounded-full ${freight.hasInsurance ? "bg-green-500" : "bg-red-500"}`}
-                          ></div>
-                          <p>Seguro</p>
-                        </div>
-                      </div>
+                      <h3 className="font-medium mb-2"><FileText className="h-5 w-5 text-primary" />Requisitos</h3>
+                      <p>Ajuda na carga: {freight.requiresLoadingHelp ? "Sim" : "Não"}</p>
+                      <p>Ajuda na descarga: {freight.requiresUnloadingHelp ? "Sim" : "Não"}</p>
+                      <p>Seguro: {freight.hasInsurance ? "Sim" : "Não"}</p>
                     </div>
                   </div>
 
                   {freight.description && (
                     <>
                       <Separator className="my-6" />
-                      <div>
-                        <h3 className="font-medium mb-3">Descrição</h3>
-                        <p className="text-muted-foreground">{freight.description}</p>
-                      </div>
+                      <p>{freight.description}</p>
                     </>
                   )}
                 </CardContent>
               </Card>
 
+              {/* Histórico */}
               <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Histórico de Status</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Frete criado</p>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(freight.createdAt).toLocaleDateString("pt-AO", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
+                <CardHeader><CardTitle>Histórico de Status</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Status dinâmicos */}
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
                     </div>
-
-                    {(freight.status !== "PENDING" && freight.transporterId) && (
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                          <Truck className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium">Frete atribuído a transportador</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(freight.createdAt).toLocaleDateString("pt-AO", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {freight.status === "IN_PROGRESS" && (
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
-                          <Truck className="h-4 w-4 text-purple-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium">Frete em trânsito</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date().toLocaleDateString("pt-AO", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {freight.status === "COMPLETED" && (
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium">Frete entregue</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date().toLocaleDateString("pt-AO", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {freight.status === "CANCELED" && (
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                          <AlertTriangle className="h-4 w-4 text-red-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium">Frete cancelado</p>
-                          <p className="text-sm text-muted-foreground">
-                            {new Date(freight.canceledAt).toLocaleDateString("pt-AO", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    )}
+                    <div>
+                      <p className="font-medium">Frete criado</p>
+                      <p className="text-sm text-muted-foreground">{new Date(freight.createdAt).toLocaleString("pt-AO")}</p>
+                    </div>
                   </div>
+                  {/* Outros status como em progresso, cancelado, concluído */}
+                  {/* {freight.status === "PENDING" && <p>Frete Pendente</p>} */}
+                {freight.status === "PENDING" && <p>Frete Pendente</p>}
+                {freight.status === "ACCEPTED" && <p>Frete Aceito</p>}
+                {freight.status === "IN_PROGRESS" && <p>Em Andamento</p>}
+                {freight.status === "COMPLETED" && <p>Frete Concluído</p>}
+                {freight.status === "CANCELED" && <p>Frete Cancelado</p>}
+
+                  {/* Repetir lógica conforme status do frete */}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -545,8 +385,7 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Map className="h-5 w-5 text-primary" />
-                    Mapa da Rota
+                    <Map className="h-5 w-5 text-primary" />Mapa da Rota
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -561,42 +400,17 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
                   ) : (
                     <MapView
                       locations={mapLocations}
-                      showRoute={true}
+                      showRoute
                       height="400px"
                       vehiclePosition={
-                        freight.status === "IN_PROGRESS"
-                          ? {
-                              // Posição simulada do veículo (em uma implementação real, isso viria do rastreamento)
-                              latitude: (mapLocations[0].latitude + mapLocations[1].latitude) / 2,
-                              longitude: (mapLocations[0].longitude + mapLocations[1].longitude) / 2,
-                              name: "Veículo em trânsito",
-                              description: `Transportando frete #${id}`,
-                            }
-                          : undefined
+                        freight.status === "IN_PROGRESS" ? {
+                          latitude: (mapLocations[0].latitude + mapLocations[1].latitude) / 2,
+                          longitude: (mapLocations[0].longitude + mapLocations[1].longitude) / 2,
+                          name: "Veículo em trânsito",
+                          description: `Transportando frete #${id}`,
+                        } : undefined
                       }
                     />
-                  )}
-
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-muted p-3 rounded-md">
-                      <h4 className="text-sm font-medium mb-1">Distância Estimada</h4>
-                      <p className="text-xl">{freight.estimatedDistance} km</p>
-                    </div>
-                    <div className="bg-muted p-3 rounded-md">
-                      <h4 className="text-sm font-medium mb-1">Tempo Estimado</h4>
-                      <p className="text-xl">{freight.estimatedTime} horas</p>
-                      
-                    </div>
-                  </div>
-
-                  {freight.status === "IN_PROGRESS" && (
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                      <h4 className="text-sm font-medium text-blue-700 mb-1">Informações de Rastreamento</h4>
-                      <p className="text-sm">
-                        Veículo em trânsito. Previsão de chegada:{" "}
-                        {new Date(freight.deliveryDate).toLocaleDateString("pt-AO")}
-                      </p>
-                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -604,164 +418,58 @@ export default function FreightDetailsPage({ params }: { params: { id: string } 
           </Tabs>
         </div>
 
+        {/* Cliente, Transportador e Ações */}
         <div className="space-y-6">
+          {/* Cliente */}
           <Card>
-            <CardHeader>
-              <CardTitle>Cliente</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Cliente</CardTitle></CardHeader>
             <CardContent>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium">{freight.client.person.fullName}</p>
-                  <p className="text-sm text-muted-foreground">Cliente desde {new Date(user.createdAt).toLocaleDateString("pt-AO")}</p>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Email</span>
-                  <span>{""}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Telefone</span>
-                  <span>{""}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Empresa</span>
-                  <span>{"userProfile.client.companyName || N/A"}</span>
-                </div>
-              </div>
-              {/*<Button variant="outline" className="w-full mt-4">
-                Contactar Cliente
-              </Button>*/}
+              <p>{freight.client.person.fullName}</p>
+              <p>Cliente desde {new Date(user.createdAt).toLocaleDateString("pt-AO")}</p>
             </CardContent>
           </Card>
 
-          {(freight.status !== "PENDING" && freight.transporterId)  && (
+          {/* Transportador */}
+          {(freight.status !== "PENDING" && freight.transporterId) && (
             <Card>
-              <CardHeader>
-                <CardTitle>Transportador</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Transportador</CardTitle></CardHeader>
               <CardContent>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Truck className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium">{"userProfile.person.fullName"}</p>
-                    <p className="text-sm text-muted-foreground">Transportador desde {new Date(user.createdAt).toLocaleDateString("pt-BR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Email</span>
-                    <span>{user.email}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Telefone</span>
-                    <span>{user.phone}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Avaliação</span>
-                    <span className="flex items-center">
-                      4.8
-                      <svg className="w-4 h-4 text-yellow-400 ml-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                      </svg>
-                    </span>
-                  </div>
-                </div>
-                {/*<Button variant="outline" className="w-full mt-4">
-                  Contactar Transportador
-                </Button>*/}
+                <p>{"userProfile.person.fullName"}</p>
               </CardContent>
             </Card>
           )}
 
+          {/* Ações */}
           <Card>
-            <CardHeader>
-              <CardTitle>Ações</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Ações</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              {freight.status !== "PENDING" && freight.status !== "COMPLETED" && (
-                <>
-                  <Button onClick={() => setIsDialogOpen(true)} variant="destructive" className="w-full">
-                    Cancelar Frete
-                  </Button>
-                </>
-              )}
 
+              {freight.status === "PENDING" && (
+                <Button onClick={handleStart} className="w-full">Aceitar Corrida</Button>
+              )}
               {freight.status === "ACCEPTED" && (
-                <>
-                  <Button onClick={handleStart} variant="default" className="w-full">
-                    Iniciar Corrida
-                  </Button>
-                  <Button className="w-full">Ver Detalhes do Contrato</Button>
-                  <Button variant="outline" className="w-full">
-                    Contactar Cliente
-                  </Button>
-                  <Button variant="destructive" className="w-full">
-                    Reportar Problema
-                  </Button>
-                </>
+                <Button onClick={handleStart} className="w-full">Iniciar Corrida</Button>
               )}
-
               {freight.status === "IN_PROGRESS" && (
-                <>
-                <Button onClick={handleComplete} variant="destructive" className="w-full">
-                    Concluir
-                  </Button>
-                  <Button className="w-full" asChild>
-                    <Link href={`/services/client/tracking?id=${id}`}>Rastrear Frete</Link>
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    Contactar Cliente
-                  </Button>
-                  <Button variant="destructive" className="w-full">
-                    Reportar Problema
-                  </Button>
-                </>
+                <Button onClick={handleComplete} className="w-full">Fechar Corrida</Button>
               )}
-
-              {freight.status === "COMPLETED" && (
-                <>
-                  <Button className="w-full">Avaliar Transportador</Button>
-                  <Button variant="outline" className="w-full">
-                    Ver Recibo
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    Solicitar Novo Frete
-                  </Button>
-                </>
+              {(freight.status !== "PENDING" && freight.status !== "COMPLETED") && (
+                <Button onClick={() => setIsDialogOpen(true)} variant="destructive" className="w-full">
+                  Cancelar Frete
+                </Button>
               )}
-
               {freight.status === "CANCELED" && (
-                <>
-                  <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setShowReason(!showReason)}
-                    >
-                      {showReason ? "Esconder Motivo" : "Ver Motivo do Cancelamento"}
-                    </Button>
-
-                    {showReason && (
-                      <div className="mt-2 p-4 rounded-lg border bg-muted text-sm text-muted-foreground">
-                        {freight.cancelationReason || "Nenhum motivo informado"}
-                      </div>
-                    )}
-                </>
+                <Button onClick={() => setShowReason(!showReason)} className="w-full">
+                  {showReason ? "Esconder Motivo" : "Ver Motivo do Cancelamento"}
+                </Button>
               )}
-              
+              {showReason && (
+                <div className="mt-2 p-4 rounded-lg border bg-muted text-sm text-muted-foreground">
+                  {freight.cancelReason || "Nenhum motivo informado"}
+                </div>
+              )}
             </CardContent>
           </Card>
-
-          
         </div>
       </div>
     </div>
