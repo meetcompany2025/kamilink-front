@@ -1,16 +1,13 @@
 {
-  "rewrites": [
-    {
-      "source": "/services/:path*/:dynamic*",
-      "destination": "/services/:path*/:dynamic*"
+  "version": 2,
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "functions": {
+    "app/services/[...path]/page.js": {
+      "maxDuration": 30
     }
-  ],
-  "routes": [
-    {
-      "src": "/services/(.*)",
-      "dest": "/services/$1"
-    }
-  ],
+  },
   "headers": [
     {
       "source": "/(.*)",
