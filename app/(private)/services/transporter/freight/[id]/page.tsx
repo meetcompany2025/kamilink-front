@@ -120,7 +120,7 @@ export default function FreightDetailsPage() {
 // Iniciar frete
 async function handleStart() {
   try {
-    const updatedFreight = await FreightRequestService.accept(id)
+    const updatedFreight = await FreightRequestService.start(id)
     // setFreight(updatedFreight)
     router.push("/services/transporter/my-freights");
     toast({
@@ -134,6 +134,28 @@ async function handleStart() {
     toast({
       title: "Erro ao iniciar",
       description: "Ocorreu um erro ao iniciar o frete. Tente novamente.",
+      variant: "destructive",
+    })
+  }
+}
+
+// Aceitar frete
+async function handleAccept() {
+  try {
+    const updatedFreight = await FreightRequestService.accept(id)
+    // setFreight(updatedFreight)
+    router.push("/services/transporter/my-freights");
+    toast({
+      title: "Sucesso",
+      description: "Frete aceite com sucesso!",
+    })
+    // Opcional: redirecionar para página de rastreio
+    // router.push(`/services/tracking?id=${id}`)
+  } catch (error) {
+    console.error("Erro ao aceitar frete:", error)
+    toast({
+      title: "Erro ao aceitar corrida",
+      description: "Ocorreu um erro ao aceitar o frete. Tente novamente.",
       variant: "destructive",
     })
   }
@@ -445,7 +467,7 @@ async function handleCancelFreight() {
             <CardContent className="space-y-2">
 
               {freight.status === "PENDING" && (
-                <Button onClick={handleStart} className="w-full">Aceitar Corrida</Button>
+                <Button onClick={handleAccept} className="w-full">Aceitar Corrida</Button>
               )}
               {freight.status === "ACCEPTED" && (
                 <Button onClick={handleStart} className="w-full">Iniciar Corrida</Button>

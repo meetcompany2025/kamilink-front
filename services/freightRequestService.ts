@@ -34,6 +34,10 @@ export const FreightRequestService = {
     const res = await api.patch(`/freights/${id}/accept`);
     return res.data;
   },
+  start: async (id: string): Promise<FreightRequest> => {
+    const res = await api.patch(`/freights/${id}/start`);
+    return res.data;
+  },
   // start: async (id: string): Promise<FreightRequest> => {
   //   // console.log("Chamou");
   //   const res = await api.patch(`/freights/${id}/accept`);
