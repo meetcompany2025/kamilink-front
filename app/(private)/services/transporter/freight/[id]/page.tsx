@@ -547,7 +547,7 @@ async function handleCancelFreight() {
                 )}
 
           {/* Ações */}
-          {/* <Card>
+          <Card>
             <CardHeader><CardTitle>Ações</CardTitle></CardHeader>
             <CardContent className="space-y-2">
 
@@ -576,7 +576,7 @@ async function handleCancelFreight() {
                 </div>
               )}
             </CardContent>
-          </Card> */}
+          </Card>
         </div>
       </div>
     </div>
