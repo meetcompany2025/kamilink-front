@@ -50,9 +50,43 @@ export interface FreightRequest {
   destinationCoordinates: string;
   estimatedDistance: number;
   estimatedTime: number;
+  cancelationReason: string
+  transporterId: string;
   createdAt: string;
   updatedAt: string;
-  status?: string
+  status?: string;
+  // Image 
+  Image?: Array<{
+    id: string;
+    type: string;
+    path: string;
+    filename: string;
+    freightId: string;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+  // Client
+  client?: {
+    person: {
+      id: string;
+      fullName: string;
+      documentNumber: string;
+      phone: string;
+      provincia: string;
+      userId: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+  };
+   // Review para as avaliações
+  Review?: Array<{
+    id: string;
+    rating: number;
+    comment?: string;
+    freightId: string;
+    createdAt: string;
+    userId?: string;
+  }>;
 }
 export interface FreightRequestTransporter {
   id: string;

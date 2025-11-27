@@ -22,4 +22,15 @@ export interface Vehicle {
   createdAt: string;
   updatedAt: string;
   userId: string;
+
+    Image?: {
+    id: string;
+    type: string;
+    path: string;
+    filename: string;
+    vehicleId: string | null;
+  }[];
 }
+
+
+

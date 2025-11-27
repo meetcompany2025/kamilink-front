@@ -1,6 +1,4 @@
 "use client"
-// export const dynamic = "force-dynamic"
-// export const revalidate = 0
 
 import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
@@ -29,6 +27,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Map,
+  Star,
 } from "lucide-react"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -39,11 +38,13 @@ import {
   DialogHeader,
   DialogFooter,
   DialogTitle,
-} from "@/components/ui/dialog" // usa seu wrapper consistente
+} from "@/components/ui/dialog"
 import { FreightRequest } from "@/types/freightRequest"
-
-// Importa o tipo real do seu projeto — ajuste o path se necessário
-
+import { ReviewService } from "@/services/reviewService"
+import { FreightImage } from "@/components/FreightImage"
+import { StarRating } from "@/components/StarRatingProps"
+import { ReviewForm } from "@/components/ReviewForm"
+import { safeFormatDate } from "@/services/safeFormatDate"
 
 type FreightStatus =
   | "PENDING"
@@ -52,11 +53,15 @@ type FreightStatus =
   | "COMPLETED"
   | "CANCELED"
 
+// Componente para exibir a imagem do frete
+
+
 export function FreightDetailsContent() {
   const router = useRouter()
-  const { id } = useParams() as { id?: string } // id pode vir undefined
+  const { id } = useParams() as { id?: string }
   const { toast } = useToast()
   const { user, userProfile, isLoading: authLoading } = useAuth()
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   const [freight, setFreight] = useState<FreightRequest | null>(null)
   const [loading, setLoading] = useState(true)
@@ -67,20 +72,14 @@ export function FreightDetailsContent() {
   const [openReasonDialog, setOpenReasonDialog] = useState(false)
   const [showReasonInline, setShowReasonInline] = useState(false)
   const [mapError, setMapError] = useState(false)
+  const [isCanceling, setIsCanceling] = useState(false)
 
-  // helper seguro para formatar datas (evita new Date(undefined) crash)
-  const safeFormatDate = (value?: string | Date | null, locale = "pt-AO", opts?: Intl.DateTimeFormatOptions) => {
-    if (!value) return "-"
-    try {
-      const d = typeof value === "string" ? new Date(value) : value
-      if (Number.isNaN(d.getTime())) return "-"
-      return d.toLocaleDateString(locale, opts)
-    } catch {
-      return "-"
-    }
-  }
+  // Função para atualizar os dados após avaliação
+    const handleReviewSubmitted = async () => {
+      await fetchFreight(); // Recarrega os dados do frete para mostrar a avaliação
+    };
 
-  // badge helper (mantém sua UI)
+  // badge helper
   const getStatusBadge = (status?: FreightStatus | string | null) => {
     switch (status) {
       case "PENDING":
@@ -120,9 +119,8 @@ export function FreightDetailsContent() {
 
   // buscar detalhes do frete
   const fetchFreight = useCallback(async () => {
-    // proteção: só buscar se id existir
     if (!id) {
-      toast?.({
+      toast({
         title: "Erro",
         description: "ID do frete ausente na rota.",
         variant: "destructive",
@@ -136,7 +134,7 @@ export function FreightDetailsContent() {
       const data = await FreightRequestService.getFreightDetail(id)
 
       if (!data) {
-        toast?.({
+        toast({
           title: "Erro",
           description: "Frete não encontrado.",
           variant: "destructive",
@@ -182,7 +180,6 @@ export function FreightDetailsContent() {
         setMapLocations(locations)
 
         if (!originCoords || !destinationCoords) {
-          // marca erro no mapa para habilitar fallback UI
           setMapError(true)
         }
       } catch (err) {
@@ -193,7 +190,7 @@ export function FreightDetailsContent() {
       }
     } catch (err) {
       console.error("Erro ao carregar frete:", err)
-      toast?.({
+      toast({
         title: "Erro",
         description: "Não foi possível carregar os detalhes do frete.",
         variant: "destructive",
@@ -204,12 +201,11 @@ export function FreightDetailsContent() {
     }
   }, [id, router, toast])
 
-  // aguarda auth carregar — evita buscar antes do contexto pronto
+  // aguarda auth carregar
   useEffect(() => {
     if (authLoading) return
-    // se não autenticado, redireciona
     if (!user) {
-      toast?.({
+      toast({
         title: "Erro",
         description: "Usuário não autenticado.",
         variant: "destructive",
@@ -217,16 +213,15 @@ export function FreightDetailsContent() {
       router.replace("/login")
       return
     }
-    // busca frete quando tudo pronto
     fetchFreight()
   }, [authLoading, user, fetchFreight, router, toast])
 
-  // cancelar frete
+  // CORRIGIDO: cancelar frete com motivo
   const handleCancelFreight = async () => {
     if (!id) return
 
     if (!cancelReason.trim()) {
-      toast?.({
+      toast({
         title: "Erro",
         description: "Por favor, informe o motivo do cancelamento.",
         variant: "destructive",
@@ -235,24 +230,42 @@ export function FreightDetailsContent() {
     }
 
     try {
+      setIsCanceling(true)
       setIsDialogOpen(false)
-      // mostra loading local (opcional)
-      await FreightRequestService.cancel(id)
-      toast?.({
+      
+      // AGORA envia o motivo no corpo da requisição
+      await FreightRequestService.cancel(id, cancelReason)
+      
+      toast({
         title: "Frete cancelado",
         description: "Seu frete foi cancelado com sucesso.",
       })
-      // atualiza estado local - refetch para garantir sincronia com backend
+      
+      // atualiza estado local
       await fetchFreight()
-      // redireciona para lista de fretes do cliente (opcional)
+      
+      // redireciona para lista de fretes do cliente
       router.replace("/services/client/my-freights")
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao cancelar frete:", err)
-      toast?.({
+      
+      // Mensagem de erro mais específica
+      let errorMessage = "Ocorreu um erro ao cancelar. Tente novamente."
+      
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message
+      } else if (err.message?.includes("400")) {
+        errorMessage = "Não foi possível cancelar o frete. Verifique se o status permite cancelamento."
+      }
+      
+      toast({
         title: "Erro ao cancelar",
-        description: "Ocorreu um erro ao cancelar. Tente novamente.",
+        description: errorMessage,
         variant: "destructive",
       })
+    } finally {
+      setIsCanceling(false)
+      setCancelReason("") // Limpa o motivo após o cancelamento
     }
   }
 
@@ -339,8 +352,12 @@ export function FreightDetailsContent() {
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
               Voltar
             </Button>
-            <Button variant="destructive" onClick={handleCancelFreight}>
-              Confirmar Cancelamento
+            <Button 
+              variant="destructive" 
+              onClick={handleCancelFreight}
+              disabled={isCanceling}
+            >
+              {isCanceling ? "Cancelando..." : "Confirmar Cancelamento"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -352,10 +369,6 @@ export function FreightDetailsContent() {
           <DialogHeader>
             <DialogTitle>Motivo do Cancelamento</DialogTitle>
           </DialogHeader>
-
-          {/* <p className="text-sm text-muted-foreground whitespace-pre-line">
-            {freight.cancelationReason ?? "Nenhum motivo informado."}
-          </p> */}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpenReasonDialog(false)}>
@@ -550,9 +563,6 @@ export function FreightDetailsContent() {
                         </div>
                         <div>
                           <p className="font-medium">Frete cancelado</p>
-                          {/* <p className="text-sm text-muted-foreground">
-                            {safeFormatDate(freight.canceledAt)}
-                          </p> */}
                         </div>
                       </div>
                     )}
@@ -656,6 +666,19 @@ export function FreightDetailsContent() {
             </CardContent>
           </Card>
 
+        {/* Image Frete */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Imagem do Frete
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FreightImage freight={freight} />
+            </CardContent>
+          </Card>
+
           {(freight.status !== "PENDING" && (freight as any).assignedTransporterId) && (
             <Card>
               <CardHeader>
@@ -705,6 +728,7 @@ export function FreightDetailsContent() {
               {freight.status === "PENDING" && (
                 <>
                   <Button
+                    disabled
                     variant="outline"
                     className="w-full"
                     onClick={() => router.push(`/services/client/freight/edit/${id}`)}
@@ -736,25 +760,70 @@ export function FreightDetailsContent() {
                 </>
               )}
 
-              {freight.status === "COMPLETED" && (
+              {/* {freight.status === "COMPLETED" && (
                 <>
                   <Button className="w-full">Avaliar Transportador</Button>
                   <Button variant="outline" className="w-full">Ver Recibo</Button>
                   <Button variant="outline" className="w-full">Solicitar Novo Frete</Button>
                 </>
-              )}
+              )} */}
+
+              {freight.status === "COMPLETED" && (
+                  <>
+                    {/* Verifica se já existe avaliação */}
+                    {freight.Review && freight.Review.length > 0 ? (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Star className="h-5 w-5 text-yellow-500" />
+                            Sua Avaliação
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div>
+                            <StarRating 
+                              rating={freight.Review[0].rating} 
+                              readonly 
+                              size="md"
+                            />
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {freight.Review[0].rating} estrelas
+                            </p>
+                          </div>
+                          {freight.Review[0].comment && (
+                            <div>
+                              <p className="text-sm font-medium">Seu comentário</p>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {freight.Review[0].comment}
+                              </p>
+                            </div>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            Avaliado em {safeFormatDate(freight.Review[0].createdAt)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <ReviewForm 
+                        freightId={freight.id}
+                        onReviewSubmitted={handleReviewSubmitted}
+                      />
+                    )}
+                    
+                    <Button variant="outline" className="w-full">Ver Recibo</Button>
+                    <Button variant="outline" className="w-full">Solicitar Novo Frete</Button>
+                  </>
+                )}
+
+              
 
               {freight.status === "CANCELED" && (
                 <>
                   <Button className="w-full">Criar Novo Frete</Button>
-                  {/* <Button variant="outline" className="w-full" onClick={() => setShowReasonInline(!showReason)}>
-                    {showReasonInline ? "Esconder Motivo" : "Ver Motivo do Cancelamento"}
-                  </Button> */}
 
                   {showReasonInline && (
                     <div className="mt-2 p-4 rounded-lg border bg-muted text-sm text-muted-foreground">
                       Nenhum motivo informado
-                      {/* {freight.cancelationReason ?? "Nenhum motivo informado"} */}
                     </div>
                   )}
                 </>
@@ -767,11 +836,6 @@ export function FreightDetailsContent() {
   )
 }
 
-/**
- * Export default page wrapper — mantém um small wrapper para possível proteção (ProtectedRoute)
- * Se no futuro quiser trocar por Server Component para SSR, dá pra extrair a fetch para server.
- */
 export default function FreightDetailsPage() {
   return <FreightDetailsContent />
 }
-

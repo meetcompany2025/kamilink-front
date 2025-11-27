@@ -426,7 +426,7 @@ useEffect(() => {
               </CardContent>
               <CardFooter>
                 <Button variant="outline" asChild className="w-full">
-                  <Link href="/services/transporter/register-vehicle">Adicionar Veículo</Link>
+                  <Link href="/services/transporter/vehicles/register-vehicle">Adicionar Veículo</Link>
                 </Button>
               </CardFooter>
             </Card>

@@ -37,3 +37,38 @@ export async function getTransporterById(id: string) {
   const response = await api.get(`transporters/${id}`)
   return response.data
 }
+
+export const TransporterDocumentService = {
+  /**
+   * Envia os documentos do transportador para o backend
+   */
+  async uploadDocuments(
+    transporterId: string,
+    identificationFile: File | null,
+    driverLicenseFile: File | null,
+    documentType: string // 'BI' ou 'NIF'
+  ) {
+    if (!identificationFile || !driverLicenseFile) {
+      throw new Error("Ambos os documentos são obrigatórios")
+    }
+
+    const formData = new FormData()
+
+    // Adiciona os arquivos
+    formData.append("identification", identificationFile)
+    formData.append("driverLicense", driverLicenseFile)
+
+    // Adiciona os tipos de documento como JSON string
+    const documentTypes = [documentType, "DRIVER_LICENSE"]
+    formData.append("documentTypes", JSON.stringify(documentTypes))
+
+    // Faz a requisição
+    const res = await api.post(
+      `/uploads/transporter-documents/${transporterId}/upload`,
+      formData,
+      { noJson: true } // Importante para FormData
+    )
+
+    return res.data
+  },
+}

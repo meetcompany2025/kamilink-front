@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -20,6 +20,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Map,
+  Star,
 } from "lucide-react"
 import Link from "next/link"
 import { MapView, type MapLocation } from "@/components/map/map-view"
@@ -29,10 +30,15 @@ import { DialogHeader, DialogFooter } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogTitle } from "@radix-ui/react-dialog"
 import { useParams } from "next/navigation"
+import { FreightRequest } from "@/types/freightRequest"
+import { FreightImage } from "@/components/FreightImage"
+import { StarRating } from "@/components/StarRatingProps"
+import { ReviewForm } from "@/components/ReviewForm"
+import { safeFormatDate } from "@/services/safeFormatDate"
 
 export default function FreightDetailsPage() {
 // export default function FreightDetailsPage({ params }: { params: { id: string } }) {
-  const [freight, setFreight] = useState<any>(null)
+  const [freight, setFreight] = useState<FreightRequest | null>(null)
   const [loading, setLoading] = useState(true)
   const [mapLocations, setMapLocations] = useState<MapLocation[]>([])
   const [isLoadingMap, setIsLoadingMap] = useState(false)
@@ -46,13 +52,7 @@ export default function FreightDetailsPage() {
   // const { id } = params
   const { id } = useParams() as { id?: string } // id pode vir undefined
 
-  useEffect(() => {
-    if (!user) {
-      router.push("/login")
-      return
-    }
-
-    const fetchFreight = async () => {
+   const fetchFreight = useCallback (async () => {
       try {
         setLoading(true)
         const data = await FreightRequestService.getFreightDetail(id)
@@ -111,12 +111,22 @@ export default function FreightDetailsPage() {
       } finally {
         setLoading(false)
       }
+    }, [id, router, toast])
+
+  useEffect(() => {
+    if (!user) {
+      router.push("/login")
+      return
     }
 
     fetchFreight()
   }, [user, router, id, toast])
 
-
+  // Função para atualizar os dados após avaliação
+    const handleReviewSubmitted = async () => {
+      await fetchFreight(); // Recarrega os dados do frete para mostrar a avaliação
+    };
+    
 // Iniciar frete
 async function handleStart() {
   try {
@@ -196,7 +206,7 @@ async function handleCancelFreight() {
       return
     }
 
-    const updatedFreight = await FreightRequestService.cancel(id)
+    const updatedFreight = await FreightRequestService.cancel(id, cancelReason)
      // setFreight(updatedFreight)
     router.push("/services/transporter/my-freights");
     setIsDialogOpen(false)
@@ -268,12 +278,12 @@ async function handleCancelFreight() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        {/* <div className="flex items-center gap-2">
           {getStatusBadge(freight.status)}
           <Button asChild>
-            <Link href={`/services/tracking?id=${id}`}>Rastrear</Link>
+            <Link href={`/services/client/tracking?id=${id}`}>Rastrear</Link>
           </Button>
-        </div>
+        </div> */}
       </div>
 
       {/* Cancelation Dialog */}
@@ -307,7 +317,7 @@ async function handleCancelFreight() {
             <DialogTitle>Motivo do Cancelamento</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground whitespace-pre-line">
-            {freight.cancelReason || "Nenhum motivo informado."}
+            {freight.cancelationReason || "Nenhum motivo informado."}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Fechar</Button>
@@ -360,10 +370,30 @@ async function handleCancelFreight() {
                       <p>Preço: {freight.price || 0} KZ</p>
                     </div>
                     <div>
-                      <h3 className="font-medium mb-2"><FileText className="h-5 w-5 text-primary" />Requisitos</h3>
-                      <p>Ajuda na carga: {freight.requiresLoadingHelp ? "Sim" : "Não"}</p>
-                      <p>Ajuda na descarga: {freight.requiresUnloadingHelp ? "Sim" : "Não"}</p>
-                      <p>Seguro: {freight.hasInsurance ? "Sim" : "Não"}</p>
+                        <h3 className="font-medium flex items-center gap-2 mb-3">
+                        <FileText className="h-5 w-5 text-primary" />
+                        Requisitos
+                      </h3>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-4 h-4 rounded-full ${freight.requiresLoadingHelp ? "bg-green-500" : "bg-red-500"}`}
+                          ></div>
+                          <p>Ajuda na carga</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-4 h-4 rounded-full ${freight.requiresUnloadingHelp ? "bg-green-500" : "bg-red-500"}`}
+                          ></div>
+                          <p>Ajuda na descarga</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`w-4 h-4 rounded-full ${freight.hasInsurance ? "bg-green-500" : "bg-red-500"}`}
+                          ></div>
+                          <p>Seguro</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -451,18 +481,73 @@ async function handleCancelFreight() {
             </CardContent>
           </Card>
 
+            {/* Image Frete */}
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-primary" />
+                          Imagem do Frete
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <FreightImage freight={freight} />
+                      </CardContent>
+                    </Card>
+
           {/* Transportador */}
           {(freight.status !== "PENDING" && freight.transporterId) && (
             <Card>
               <CardHeader><CardTitle>Transportador</CardTitle></CardHeader>
               <CardContent>
-                <p>{"userProfile.person.fullName"}</p>
+                <p>{`${userProfile.person.fullName}`}</p>
               </CardContent>
             </Card>
           )}
 
+          {freight.status === "COMPLETED" && (
+                  <>
+                    {/* Verifica se já existe avaliação */}
+                    {freight.Review && freight.Review.length > 0 && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2">
+                            <Star className="h-5 w-5 text-yellow-500" />
+                            Avaliação da Corrida
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div>
+                            <StarRating 
+                              rating={freight.Review[0].rating} 
+                              readonly 
+                              size="md"
+                            />
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {freight.Review[0].rating} estrelas
+                            </p>
+                          </div>
+                          {freight.Review[0].comment && (
+                            <div>
+                              <p className="text-sm font-medium">Comentário</p>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {freight.Review[0].comment}
+                              </p>
+                            </div>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            Avaliado em {safeFormatDate(freight.Review[0].createdAt)}
+                          </p>
+                        </CardContent>
+                      </Card>
+                    )} 
+{/*                     
+                    <Button variant="outline" className="w-full">Ver Recibo</Button>
+                    <Button variant="outline" className="w-full">Solicitar Novo Frete</Button> */}
+                  </>
+                )}
+
           {/* Ações */}
-          <Card>
+          {/* <Card>
             <CardHeader><CardTitle>Ações</CardTitle></CardHeader>
             <CardContent className="space-y-2">
 
@@ -487,11 +572,11 @@ async function handleCancelFreight() {
               )}
               {showReason && (
                 <div className="mt-2 p-4 rounded-lg border bg-muted text-sm text-muted-foreground">
-                  {freight.cancelReason || "Nenhum motivo informado"}
+                  {freight.cancelationReason || "Nenhum motivo informado"}
                 </div>
               )}
             </CardContent>
-          </Card>
+          </Card> */}
         </div>
       </div>
     </div>

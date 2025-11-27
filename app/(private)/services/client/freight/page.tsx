@@ -123,25 +123,12 @@ const uploadFiles = async (files: File[]) => {
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      console.log("Chega aqui");
-      // Suponha um endpoint POST /upload
-      /*await api.post("/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-        onUploadProgress: (progressEvent) => {
-          const percent = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
-          setUploadProgress(percent);
-        },
-      });*/
-
-      setUploadedFiles((prev) => [...prev, file]);
-    } catch (err) {
-      console.error("Erro ao enviar arquivo:", file.name, err);
-      // (Opcional) Marcar erro por arquivo
-    }
+    
+    // ✅ APENAS adicionar à lista - upload será feito APÓS criar frete
+    setUploadedFiles((prev) => [...prev, file]);
+    
+    // Simular progresso (opcional)
+    setUploadProgress(((i + 1) / files.length) * 100);
   }
 
   setIsUploading(false);
@@ -397,7 +384,23 @@ const removeFile = (index: number) => {
       console.log(freightData)
 
       // Envia a solicitação de frete para o Supabase
-      await FreightRequestService.create(freightData);
+      const createdFreight = await FreightRequestService.create(freightData);
+
+       // ✅ 4️⃣ NOVO: Upload da imagem do frete (se houver)
+    if (uploadedFiles.length > 0) {
+      console.log("📸 Fazendo upload da imagem do frete...");
+      
+      // Para cada arquivo enviado, fazer upload vinculado ao frete
+      for (const file of uploadedFiles) {
+        try {
+          await FreightRequestService.uploadFreightImage(createdFreight.id, file);
+          console.log(`✅ Imagem ${file.name} enviada para o frete ${createdFreight.id}`);
+        } catch (uploadError) {
+          console.error(`❌ Erro ao enviar imagem ${file.name}:`, uploadError);
+          // Continuar mesmo se uma imagem falhar
+        }
+      }
+    }
 
       // Avança para a etapa de confirmação
       setCurrentStep(5)

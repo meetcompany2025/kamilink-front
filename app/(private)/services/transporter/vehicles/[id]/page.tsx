@@ -1,206 +1,146 @@
-// app/vehicles/[id]/page.tsx
-'use client'
+"use client";
 export const fetchCache = "force-no-store";
-// export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { CreateVehicleDto } from '@/types/vehicle' // esquema de validação
-import { VehicleService } from '@/services/vehicleService'
-import { Truck, Upload } from 'lucide-react'
-import { z } from "zod"
-
-import {
-  Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription
-} from '@/components/ui/form'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Textarea } from '@/components/ui/textarea'
-import { Separator } from '@/components/ui/separator'
-import { Button } from '@/components/ui/button'
-
-const availableFeatures = [
-  { id: 'gps', label: 'GPS' },
-  { id: 'ar-condicionado', label: 'Ar Condicionado' },
-  { id: 'airbag', label: 'Airbag' },
-  { id: 'freio-abs', label: 'Freio ABS' },
-]
-
-const formSchema = z.object({
-  type: z.string().min(1, {
-    message: "Tipo de veículo é obrigatório.",
-  }),
-  brand: z.string().min(1, {
-    message: "Marca é obrigatória.",
-  }),
-  model: z.string().min(1, {
-    message: "Modelo é obrigatório.",
-  }),
-  licensePlate: z.string().min(1, {
-    message: "Placa é obrigatória.",
-  }),
-  year: z.string().min(1, {
-    message: "Ano é obrigatório.",
-  }),
-  loadCapacity: z.number().min(1, {
-    message: "Capacidade é obrigatória.",
-  }),
-  dimensions: z.string().optional(),
-  features: z.array(z.string()).default([]),
-  description: z.string().optional(),
-  hasDocumentation: z
-    .boolean()
-    .default(false)
-    .refine((val) => val === true, {
-      message: "Você deve confirmar que possui a documentação do veículo.",
-    }),
-  trailerType: z.string(),
-  baseProvince: z.string(),
-})
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { VehicleService } from "@/services/vehicleService";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Truck } from "lucide-react";
+import api from "@/services/api";
 
 export default function VehicleDetailPage() {
-  const {id} = useParams<{id: string}>()
-  const vehicleId = id
+  const { id } = useParams<{ id: string }>();
+  const vehicleId = id;
 
-  const form = useForm({
-      resolver: zodResolver(formSchema),
-      defaultValues: {
-        type: "",
-        brand: "",
-        model: "",
-        licensePlate: "",
-        year: "",
-        loadCapacity: 0,
-        dimensions: "",
-        features: [],
-        description: "",
-        hasDocumentation: false,
-        trailerType: "N/A",
-        baseProvince: "Luanda",
-      },
-    })
-
-  const { setValue, reset } = form
-
-  const [loading, setLoading] = useState(true)
+  const [vehicle, setVehicle] = useState<any>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadVehicle = async () => {
+    const load = async () => {
       try {
-        const data = await VehicleService.getById(vehicleId)
-        reset(data) // preenche o formulário com os dados
-      } catch (err) {
-        console.error('Erro ao carregar veículo:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
+        const v = await VehicleService.getById(vehicleId);
+        setVehicle(v);
 
-    loadVehicle()
-  }, [vehicleId, reset])
+        // ---- CORREÇÃO: pegar imagem via signed URL ----
+      const image = v.Image?.find((i: any) => i.type === "VEHICLE_IMAGE");
+
+      if (image) {
+        const url = `${process.env.NEXT_PUBLIC_API_URL}/uploads/${image.id}/view`;
+        setImageUrl(url);
+      } else {
+        setImageUrl(null);
+      }
+
+      } catch (err) {
+        console.error("Erro ao carregar veículo:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [vehicleId]);
 
   if (loading) {
     return (
       <div className="p-8 text-center text-muted-foreground">
         Carregando dados do veículo...
       </div>
-    )
+    );
+  }
+
+  if (!vehicle) {
+    return (
+      <div className="p-8 text-center text-red-500">
+        Veículo não encontrado.
+      </div>
+    );
   }
 
   return (
-    <div className="container max-w-4xl mx-auto py-10">
-      <h1 className="text-2xl font-bold mb-6">Detalhes do Veículo</h1>
+    <div className="container max-w-4xl mx-auto py-10 space-y-8">
+      <h1 className="text-3xl font-bold">Detalhes do Veículo</h1>
 
-      <Form {...form}>
-        <form className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Truck className="h-5 w-5 text-primary" />
-                Informações do Veículo
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Campos conforme seu formulário original, todos usando: */}
-              {/* <FormField name="..." render={({ field }) => ( <Input {...field} disabled /> )} /> */}
+      {/* Foto do veículo */}
+      <Card className="overflow-hidden">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Truck className="w-5 h-5 text-primary" />
+            Foto do Veículo
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt="Vehicle"
+              className="w-full h-64 object-cover rounded-xl shadow-md border"
+            />
+          ) : (
+            <div className="w-full h-64 flex items-center justify-center rounded-xl border bg-muted text-muted-foreground">
+              Sem imagem disponível
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-              {/* Exemplo resumido: */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo de Veículo</FormLabel>
-                      <FormControl>
-                        <Input {...field} disabled />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+      {/* Dados principais */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Informações Técnicas</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
 
-                <FormField
-                  control={form.control}
-                  name="brand"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Marca</FormLabel>
-                      <FormControl>
-                        <Input {...field} disabled />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Info label="Tipo" value={vehicle.type} />
+            <Info label="Marca" value={vehicle.brand} />
+            <Info label="Modelo" value={vehicle.model} />
+            <Info label="Placa" value={vehicle.licensePlate} />
+            <Info label="Ano" value={vehicle.year} />
+            <Info label="Capacidade de Carga" value={`${vehicle.loadCapacity} kg`} />
+            <Info label="Dimensões" value={vehicle.dimensions || "N/A"} />
+            <Info label="Reboque" value={vehicle.trailerType} />
+            <Info label="Província Base" value={vehicle.baseProvince} />
+          </div>
 
-              {/* Continue adicionando os outros campos do formulário da mesma forma */}
+          <Separator />
 
-              <Separator />
+          {/* <div>
+            <h3 className="font-medium mb-1">Características</h3>
+            {vehicle.features?.length ? (
+              <ul className="list-disc ml-5 text-sm">
+                {vehicle.features.map((f: string) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Nenhuma característica adicionada.
+              </p>
+            )}
+          </div> */}
 
-              <div className="space-y-3">
-                <label className="text-sm font-medium">Características</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {availableFeatures.map((feature) => (
-                    <FormField
-                      key={feature.id}
-                      control={form.control}
-                      name="features"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value?.includes(feature.id)}
-                              disabled
-                            />
-                          </FormControl>
-                          <FormLabel className="font-normal">{feature.label}</FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Descrição</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} disabled />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </CardContent>
-          </Card>
-        </form>
-      </Form>
+          {/* <Separator /> */}
+{/* 
+          <div>
+            <h3 className="font-medium mb-1">Descrição</h3>
+            <p className="text-sm text-muted-foreground">
+              {vehicle.description || "Sem descrição."}
+            </p>
+          </div> */}
+        </CardContent>
+      </Card>
     </div>
-  )
+  );
+}
+
+function Info({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="font-medium">{value}</span>
+    </div>
+  );
 }

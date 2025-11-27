@@ -68,7 +68,7 @@ export default function MyVehiclesPage() {
                 Você ainda não cadastrou nenhum veículo.
               </p>
               <Button asChild>
-                <Link href="/vehicles/register-vehicles">Cadastrar Novo Veículo</Link>
+                <Link href="/services/transporter/vehicles/register-vehicle">Cadastrar Novo Veículo</Link>
               </Button>
             </div>
           </CardContent>

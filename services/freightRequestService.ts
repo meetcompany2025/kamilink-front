@@ -1,6 +1,9 @@
 import api from './api';
 import { CreateFreightRequestDto, FreightRequest } from '../types/freightRequest';
 
+interface CancelFreightDto {
+  reason: string;
+}
 export const FreightRequestService = {
   create: async (data: CreateFreightRequestDto): Promise<FreightRequest> => {
     const res = await api.post('/freights', data);
@@ -47,12 +50,28 @@ export const FreightRequestService = {
     const res = await api.patch(`/freights/${id}/finish`);
     return res.data;
   },
-  cancel: async (id: string): Promise<FreightRequest> => {
-    const res = await api.patch(`/freights/${id}/cancel`);
+ // ATUALIZADO: Agora recebe o motivo do cancelamento
+  cancel: async (id: string, reason: string): Promise<FreightRequest> => {
+    const res = await api.patch(`/freights/${id}/cancel`, { reason });
     return res.data;
   },
   update: async (id: string, data: any): Promise<FreightRequest> => {
     const res = await api.patch(`/freights/${id}`, data);
     return res.data;
   },
+    /**
+   * Upload da imagem do frete
+   */
+  async uploadFreightImage(freightId: string, file: File): Promise<any> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('type', 'FREIGHT_IMAGE')
+    formData.append('freightId', freightId)
+
+    const res = await api.post('/uploads', formData, { 
+      noJson: true 
+    })
+    
+    return res.data
+  }
 };
