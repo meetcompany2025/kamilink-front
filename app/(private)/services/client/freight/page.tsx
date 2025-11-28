@@ -1359,21 +1359,21 @@ const removeFile = (index: number) => {
                           >
                             <FormItem className="flex items-center space-x-3 space-y-0">
                               <FormControl>
-                                <RadioGroupItem value="Cartão Multicaixa" />
-                              </FormControl>
-                              <FormLabel className="font-normal">Cartão Multicaixa</FormLabel>
-                            </FormItem>
-                            <FormItem className="flex items-center space-x-3 space-y-0">
-                              <FormControl>
                                 <RadioGroupItem value="Multicaixa Express" />
                               </FormControl>
                               <FormLabel className="font-normal">Multicaixa Express</FormLabel>
                             </FormItem>
                             <FormItem className="flex items-center space-x-3 space-y-0">
                               <FormControl>
-                                <RadioGroupItem value="Transferência Bancária" />
+                                <RadioGroupItem value="Multicaixa Express" />
                               </FormControl>
-                              <FormLabel className="font-normal">Transferência Bancária</FormLabel>
+                              <FormLabel className="font-normal">Cartão Visa</FormLabel>
+                            </FormItem>
+                            <FormItem className="flex items-center space-x-3 space-y-0">
+                              <FormControl>
+                                <RadioGroupItem value="Unitel Money" />
+                              </FormControl>
+                              <FormLabel className="font-normal">Unitel Money</FormLabel>
                             </FormItem>
                           </RadioGroup>
                         </FormControl>
